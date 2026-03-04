@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>CS Streamer Rating — DB Demo + Calculator (v4)</title>
+<style>
+:root{
+  --bg:#0b0f14; --text:#e8eef6; --muted:#b6c2d2;
+  --accent:#67d4ff; --accent2:#7cff9d; --warn:#ffcc66; --bad:#ff6b6b;
+  --line:rgba(232,238,246,.16); --shadow:0 10px 24px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:
+  radial-gradient(1000px 800px at 10% 10%, rgba(103,212,255,.08), transparent 60%),
+  radial-gradient(900px 700px at 80% 15%, rgba(124,255,157,.08), transparent 55%),
+  var(--bg);color:var(--text)}
+header{
+  max-width:1200px;margin:0 auto;padding:18px 16px 10px;position:sticky;top:12px;z-index:999;
+  backdrop-filter:blur(10px);background:rgba(11,15,20,.78);border:1px solid var(--line);
+  border-radius:18px;box-shadow:0 10px 24px rgba(0,0,0,.18);overflow:hidden
+}
+h1{font-size:18px;margin:0 0 6px}
+.sub{color:var(--muted);font-size:13px;line-height:1.45;margin:0 0 10px}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:rgba(18,26,36,.55)}
+.tabbtn{appearance:none;border:1px solid var(--line);background:rgba(15,22,32,.6);padding:7px 11px;border-radius:999px;font-size:12.5px;color:var(--muted);cursor:pointer}
+.tabbtn[aria-selected="true"]{border-color:rgba(232,238,246,.35);color:var(--text);background:rgba(15,22,32,.85)}
+main{max-width:1200px;margin:0 auto;padding:18px 16px 30px}
+.panel{display:none;border:1px solid var(--line);border-radius:18px;padding:14px;background:linear-gradient(180deg, rgba(18,26,36,.92), rgba(15,22,32,.75));box-shadow:var(--shadow);margin-top:10px}
+.panel.active{display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+@media (max-width:980px){.grid2{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(11,15,20,.28)}
+.card h2{font-size:14px;margin:0 0 8px}
+.card h3{font-size:13px;margin:0 0 8px;color:rgba(232,238,246,.92)}
+.small{color:var(--muted);font-size:12.5px;line-height:1.45}
+.hr{height:1px;background:var(--line);margin:12px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+label{font-size:12.5px;color:var(--muted)}
+input[type="number"],input[type="text"],select{width:100%;padding:8px 10px;border-radius:12px;border:1px solid rgba(232,238,246,.18);background:rgba(15,22,32,.6);color:var(--text);outline:none}
+input[type="range"]{width:100%}
+.field{display:grid;grid-template-columns:1fr;gap:6px;margin:8px 0}
+.inline{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.inline3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media (max-width:560px){.inline,.inline3{grid-template-columns:1fr}}
+.btn{appearance:none;border:1px solid rgba(232,238,246,.22);background:rgba(15,22,32,.65);color:var(--text);padding:8px 10px;border-radius:12px;cursor:pointer;font-size:12.5px}
+.btn:hover{border-color:rgba(232,238,246,.35)}
+.btn.primary{border-color:rgba(103,212,255,.35)}
+.btn.good{border-color:rgba(124,255,157,.35)}
+.btn.warn{border-color:rgba(255,204,102,.35)}
+.k{display:inline-block;padding:1px 6px;border-radius:8px;border:1px solid var(--line);background:rgba(11,15,20,.35);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;font-size:12.5px;color:rgba(232,238,246,.95)}
+.out{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+@media (max-width:740px){.out{grid-template-columns:1fr}}
+.outbox{border:1px solid rgba(232,238,246,.16);border-radius:14px;padding:10px;background:rgba(11,15,20,.25)}
+.hint{font-size:12px;color:var(--muted);line-height:1.35}
+.val{font-size:18px;font-weight:750;margin-top:4px}
+.final{border-color:rgba(124,255,157,.45);box-shadow:0 0 0 2px rgba(124,255,157,.08) inset;}
+.badline{border-color:rgba(255,107,107,.45)!important;box-shadow:0 0 0 2px rgba(255,107,107,.08) inset;}
+.warnline{border-color:rgba(255,204,102,.45)!important;box-shadow:0 0 0 2px rgba(255,204,102,.08) inset;}
+details{border:1px solid rgba(232,238,246,.14);border-radius:14px;padding:10px;background:rgba(11,15,20,.20)}
+details summary{cursor:pointer;color:rgba(232,238,246,.9);font-weight:600}
+table{width:100%;border-collapse:collapse}
+th,td{border-bottom:1px solid rgba(232,238,246,.12);padding:8px 6px;text-align:left;vertical-align:top;font-size:12.5px}
+th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+
+/* One-pager chart sizing: stable square charts (no layout change on redraw) */
+.chartCanvas{width:100%;height:auto;aspect-ratio:1/1;display:block}
+.chartCanvasWide{width:100%;height:auto;aspect-ratio:2.2/1;display:block}
+@media (max-width:900px){
+  .chartCanvas{aspect-ratio:1.2/1}
+  .chartCanvasWide{aspect-ratio:1.6/1}
+}
+
+.tableScroll{max-height:420px;overflow:auto;border:1px solid rgba(232,238,246,.10);border-radius:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>CS Streamer Rating — DB Demo + Калькулятор (v4)</h1>
+  <p class="sub">Фейковая база игроков + расчёт силы игрока по HLTV-like формуле + Elo-коррекция (вариант B) + SoftSkill + Quiz/Aim + ручной бонус для NoData. Команды: TeamScore = Mean − γ·Std, плюс проверка «сыгранных игроков &gt; 2» по связям из БД.</p>
+  <div class="tabs" role="tablist" aria-label="Режимы">
+    <button class="tabbtn" id="tab-doc" role="tab" aria-controls="panel-doc" aria-selected="true">One-pager</button>
+    <button class="tabbtn" id="tab-calc" role="tab" aria-controls="panel-calc" aria-selected="false">Калькулятор</button>
+    <button class="tabbtn" id="tab-settings" role="tab" aria-controls="panel-settings" aria-selected="false">Настройки</button>
+  </div>
+</header>
+
+<main>
+<section class="panel active" id="panel-doc" role="tabpanel" aria-labelledby="tab-doc">
+  <div class="card">
+    <h2>One-pager: математика игрока</h2>
+    <div class="small">
+      <div class="k">R = 0.68448 + 0.65598·KPR + 0.31305·APR − 0.75999·DPR + 0.003707·ADR + 0.72169·MKPR;  R=max(R,0)</div>
+      <div class="hr"></div>
+      <div class="k">sig = 1/(1+exp(-(Elo−E0)/W)); dR = BETA·(2·sig−1); Rcorr = (NoData? R : R+dR)</div>
+      <div class="hr"></div>
+      <div class="k">SkillScore = 100·clamp((Rcorr−Rmin)/(Rmax−Rmin),0..1)</div>
+      <div class="hr"></div>
+      <div class="k">SoftSkill = 100·((Comm/10 + Eng/10)/2)</div>
+      <div class="hr"></div>
+      <div class="k">BaseMix = (1−λ)·SkillScore + λ·SoftSkill</div>
+      <div class="hr"></div>
+      <div class="k">FinalPlayer = clamp(BaseMix + QuizAdj + AimAdj + ND, 0..100)</div>
+    </div>
+  </div>
+  <div class="hr"></div>
+
+  <div class="card">
+    <h2>Математика игрока — объяснение простыми словами</h2>
+    <div class="small">
+      <p style="margin:0 0 10px"><b>Цель:</b> получить одно число силы игрока (0..100), которое учитывает: (1) личную статистику, (2) сложность среды (Elo), (3) опциональные субъективные слои.</p>
+
+      <div class="hr"></div>
+
+      <p style="margin:0 0 8px"><b>1) Что вводим / что тянем из БД</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">Elo</span> (Faceit).</li>
+        <li>5 агрегатов: <span class="k">KPR</span>, <span class="k">APR</span>, <span class="k">DPR</span>, <span class="k">ADR</span>, <span class="k">MKPR</span>.</li>
+        <li><span class="k">NoData</span>: если данных Faceit нет — ставим <span class="k">R=R_NODATA</span> и Elo-коррекцию не применяем.</li>
+      </ul>
+
+      <p style="margin:0 0 8px"><b>2) Базовый рейтинг R (примерно 0..2)</b></p>
+      <p style="margin:0 0 10px">Это сумма вкладов метрик с коэффициентами + базовая константа. Затем <span class="k">R=max(R,0)</span>, чтобы не уходить в минус.</p>
+
+      <p style="margin:0 0 8px"><b>3) Коррекция сложности среды по Elo → Rcorr</b></p>
+      <p style="margin:0 0 10px">
+        Одинаковый R легче получить в слабой среде и сложнее — в сильной. Поэтому считаем <span class="k">sig(Elo)</span> и далее
+        <span class="k">dR=BETA·(2·sig−1)</span>, итог <span class="k">Rcorr=R+dR</span>.
+      </p>
+
+      <p style="margin:0 0 8px"><b>4) Нормализация Rcorr → SkillScore (0..100)</b></p>
+      <p style="margin:0 0 10px">
+        Линейно переводим <span class="k">[Rmin..Rmax]</span> в <span class="k">[0..100]</span> с клиппингом:
+        <span class="k">SkillScore=100·clamp((Rcorr−Rmin)/(Rmax−Rmin),0..1)</span>.
+      </p>
+
+      <p style="margin:0 0 8px"><b>5) Субъективные слои (опционально)</b></p>
+      <p style="margin:0 0 10px">
+        Далее можно добавить: <span class="k">SoftSkill</span>, <span class="k">QuizAdj</span>, <span class="k">AimAdj</span>, <span class="k">NoDataAdj</span>.
+        Итог: <span class="k">FinalPlayer=clamp(BaseMix+QuizAdj+AimAdj+ND,0..100)</span>.
+      </p>
+
+      <details>
+        <summary>Как калибровать</summary>
+        <div class="small" style="margin-top:8px">
+          • Среда влияет слишком слабо → ↑ <span class="k">BETA</span>.<br/>
+          • Сместить центр влияния → <span class="k">E0</span>.<br/>
+          • Сделать переход шире/уже → <span class="k">W</span>.<br/>
+          • Клиппинг 0/100 → подберите <span class="k">Rmin/Rmax</span>.
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="card">
+    <h2>Зачем Elo-коррекция и как она работает</h2>
+    <div class="small">
+      <p style="margin:0 0 10px">
+        Проблема: одинаковые hard-метрики (KPR/APR/DPR/ADR/MKPR) и одинаковый <span class="k">R</span> могут быть получены в разной среде.
+        На низком Elo статистику «набить проще», на высоком — «дороже». Поэтому мы добавляем корректировку сложности среды.
+      </p>
+
+      <div class="hr"></div>
+
+      <p style="margin:0 0 10px"><b>Шаги по игроку (коротко):</b></p>
+      <ol style="margin:0 0 10px 18px; padding:0">
+        <li>Считаем <span class="k">R</span> по формуле (HLTV-like).</li>
+        <li>Считаем <span class="k">sig(Elo)</span> — S-образную кривую (сигмоиду), которая почти плоская на краях и наиболее чувствительна в середине.</li>
+        <li>Считаем поправку <span class="k">dR</span> и получаем <span class="k">Rcorr = R + dR</span>.</li>
+        <li>Переводим <span class="k">Rcorr</span> в шкалу 0–100 → <span class="k">SkillScore</span>.</li>
+        <li>Дальше добавляем субъективные слои (soft/quiz/aim/NoDataAdj) — они остаются выключаемыми/калибруемыми отдельно.</li>
+      </ol>
+
+      <div class="hr"></div>
+
+      <p style="margin:0 0 10px"><b>Ключевые настройки (берутся из вкладки «Настройки»):</b></p>
+      <ul style="margin:0 0 10px 18px; padding:0">
+        <li><span class="k">E0</span> — центр сигмоиды (где влияние Elo максимально). Обычно около границы сильной среды.</li>
+        <li><span class="k">W</span> — ширина перехода (чем больше, тем «плавнее» и шире зона влияния).</li>
+        <li><span class="k">BETA</span> — амплитуда (максимальная добавка/штраф к R). На краях dR стремится к ±BETA.</li>
+      </ul>
+
+      <p style="margin:0 0 10px">
+        Интуиция формы: на низком Elo и на очень высоком Elo кривая насыщается (влияние растёт медленно),
+        а в средней зоне (вокруг <span class="k">E0</span>) влияние меняется быстрее всего.
+      </p>
+
+      <details>
+        <summary>Почему это удобно для баланса</summary>
+        <div class="small" style="margin-top:8px">
+          <ul style="margin:0 0 0 18px; padding:0">
+            <li>Одинаковый <span class="k">R</span> в сильной среде становится «дороже» → игрок на высоком Elo не недооценивается.</li>
+            <li>Одинаковый <span class="k">R</span> в слабой среде становится «дешевле» → новичок/смурф не переоценивается только за счёт слабых оппонентов.</li>
+            <li>Параметры <span class="k">E0/W/BETA</span> крутятся без изменения формул, и графики ниже сразу показывают эффект.</li>
+          </ul>
+        </div>
+      </details>
+
+      <div class="hr"></div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>График 1 — sig(Elo)</h3>
+          <div class="small">S-образная кривая (0..1). Круче всего в районе E0, на краях насыщается.</div>
+          <canvas id="ch_sig" class="chartCanvas"></canvas>
+        </div>
+        <div class="card">
+          <h3>График 2 — dR(Elo)</h3>
+          <div class="small">Поправка к R: <span class="k">dR = BETA·(2·sig−1)</span>. На краях ≈ ±BETA.</div>
+          <canvas id="ch_dr" class="chartCanvas"></canvas>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h3>График 3 — примеры Rcorr для фиксированных R</h3>
+        <div class="small">Показывает, как один и тот же R «сдвигается» по Elo. Это то, что вы руками проверяете в сценариях.</div>
+        <canvas id="ch_rcorr" class="chartCanvasWide"></canvas>
+        <div class="small" style="margin-top:8px">Линии: R=1.0, 1.2, 1.4.</div>
+      </div>
+    </div>
+  </div>
+
+<div class="hr"></div>
+
+  <div class="card">
+    <h2>Команда и «сыгранность»</h2>
+    <div class="small">
+      <div class="k">Mean = avg(FinalPlayer1..5); Std = sqrt( Σ(xi−Mean)^2 / 5 ); TeamScore = Mean − γ·Std</div>
+      <div class="hr"></div>
+      <div><b>Проверка стака</b>: считаем число сыгранных ребер внутри 5 игроков (synergyEdges из БД). Если ребер ≥ 2 → ошибка «в команде больше 2 сыгранных игроков».</div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="panel-calc" role="tabpanel" aria-labelledby="tab-calc">
+  <div class="grid2">
+    <div class="card">
+      <h2>Выбор игрока → запись в слот</h2>
+
+      <div class="inline3">
+        <div class="field"><label>Команда</label>
+          <select id="pickTeam"><option value="A">Команда A</option><option value="B">Команда B</option></select>
+        </div>
+        <div class="field"><label>Слот</label>
+          <select id="pickSlot"><option value="1">Слот 1</option><option value="2" selected>Слот 2</option><option value="3">Слот 3</option><option value="4">Слот 4</option><option value="5">Слот 5</option></select>
+        </div>
+        <div class="field"><label>Игрок (из БД)</label><select id="pickPlayer"></select></div>
+      </div>
+
+      <div class="inline3">
+        <div class="field">
+          <label>Comm (0–10)</label>
+          <input id="comm" type="range" min="0" max="10" step="1" value="5"/>
+          <div class="small">Текущее: <span class="k" id="commVal">5</span></div>
+        </div>
+        <div class="field">
+          <label>Eng (0–10)</label>
+          <input id="eng" type="range" min="0" max="10" step="1" value="5"/>
+          <div class="small">Текущее: <span class="k" id="engVal">5</span></div>
+        </div>
+        <div class="field">
+          <label>NoData manual (+)</label>
+          <input id="ndAdj" type="number" step="1" value="0"/>
+          <div class="small">Только если NoData=1</div>
+        </div>
+      </div>
+
+      <details style="margin-top:10px">
+        <summary>Тесты</summary>
+        <div class="inline">
+          <div class="field"><label>QuizScore</label><input id="quiz" type="number" step="1" value="10"/></div>
+          <div class="field"><label>AimScore</label><input id="aim" type="number" step="1" value="50"/></div>
+        </div>
+      </details>
+
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="btnCalc">Посчитать игрока</button>
+        <button class="btn good" id="btnWrite">Записать в слот</button>
+        <button class="btn" id="btnRand">Случайный игрок</button>
+        <span class="small" id="calcMsg"></span>
+      </div>
+
+      <div class="out" id="playerOut"></div>
+
+      <details style="margin-top:10px">
+        <summary>DEV: детали расчёта</summary>
+        <div id="devOut" class="small" style="margin-top:10px"></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Команды</h2>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>Команда A</h3>
+          <div id="teamA"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn good" id="btnTeamA">Посчитать TeamScore A</button>
+          </div>
+          <div class="out" id="teamAOut"></div>
+        </div>
+
+        <div class="card">
+          <h3>Команда B</h3>
+          <div id="teamB"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn good" id="btnTeamB">Посчитать TeamScore B</button>
+          </div>
+          <div class="out" id="teamBOut"></div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="card">
+        <h3>Сравнение</h3>
+        <div class="row">
+          <button class="btn warn" id="btnCompare">Сравнить A vs B</button>
+          <button class="btn" id="btnFillRandom">Заполнить рандомно</button>
+          <button class="btn" id="btnResetTeams">Сбросить</button>
+        </div>
+        <div id="compareOut"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings">
+  <div class="grid2">
+    <div class="card">
+      <h2>Параметры модели</h2>
+      <div class="small">Все параметры настраиваемые (“cfg”).</div>
+
+      <div class="hr"></div>
+
+      <h3>Нормализация R → 0..100</h3>
+      <div class="inline3">
+        <div class="field"><label>Rmin</label><input id="set_Rmin" type="number" step="0.00001" value="0.6844811"/></div>
+        <div class="field"><label>Rmax</label><input id="set_Rmax" type="number" step="0.01" value="2.0"/></div>
+        <div class="field"><label>R (NoData)</label><input id="set_Rnodata" type="number" step="0.01" value="1.0"/></div>
+      </div>
+
+      <h3>Elo-коррекция (вариант B)</h3>
+      <div class="inline3">
+        <div class="field"><label>E0</label><input id="set_E0" type="number" step="1" value="2000"/></div>
+        <div class="field"><label>W</label><input id="set_W" type="number" step="1" value="700"/></div>
+        <div class="field"><label>BETA</label><input id="set_BETA" type="number" step="0.01" value="0.12"/></div>
+      </div>
+
+      <h3>Soft / Team</h3>
+      <div class="inline3">
+        <div class="field"><label>λ</label><input id="set_lambda" type="number" step="0.01" min="0" max="0.5" value="0.15"/></div>
+        <div class="field"><label>γ</label><input id="set_gamma" type="number" step="0.05" min="0" max="2" value="0.70"/></div>
+        <div class="field"><label>ND_MAX</label><input id="set_NDmax" type="number" step="1" min="0" value="12"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>ND_ALLOW_NEG</label>
+          <select id="set_NDneg"><option value="0" selected>Нет</option><option value="1">Да</option></select>
+        </div>
+        <div class="field"><label>Δ green</label><input id="set_tgreen" type="number" step="0.1" min="0" value="1.5"/></div>
+        <div class="field"><label>Δ yellow</label><input id="set_tyellow" type="number" step="0.1" min="0" value="3.0"/></div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h3>Quiz</h3>
+      <div class="inline3">
+        <div class="field"><label>Q_MAX</label><input id="set_Qmax" type="number" step="1" value="15"/></div>
+        <div class="field"><label>Q0</label><input id="set_Q0" type="number" step="1" value="10"/></div>
+        <div class="field"><label>Q_MIN</label><input id="set_Qmin" type="number" step="1" value="0"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>Q_MAX_RAW</label><input id="set_Qmaxraw" type="number" step="1" value="20"/></div>
+        <div class="field"><div class="small">QuizAdj линейно вокруг Q0.</div></div>
+        <div></div>
+      </div>
+
+      <h3>Aim</h3>
+      <div class="inline3">
+        <div class="field"><label>A_MAX</label><input id="set_Amax" type="number" step="1" value="10"/></div>
+        <div class="field"><label>A0</label><input id="set_A0" type="number" step="1" value="50"/></div>
+        <div class="field"><label>A_MIN</label><input id="set_Amin" type="number" step="1" value="0"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>A_MAX_RAW</label><input id="set_Amaxraw" type="number" step="1" value="100"/></div>
+        <div class="field"><div class="small">AimAdj линейно вокруг A0.</div></div>
+        <div></div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="btnApplyCfg">Применить настройки</button>
+        <button class="btn" id="btnExportCfg">Экспорт cfg JSON</button>
+      </div>
+      <div class="field"><label>cfg JSON</label><input id="cfgJson" type="text" /></div>
+      <div class="small" id="cfgMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Фейковая БД</h2>
+      <div class="small">Сгенерировано N игроков и список сыгранных пар (synergy edges). В реальной системе это будет ваша таблица many-to-many.</div>
+      <div class="hr"></div>
+      <div class="row"><button class="btn" id="btnRegenDB">Перегенерировать БД</button></div>
+      <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
+        <button class="btn" id="btnExportDB">Скачать БД (JSON)</button>
+        <label class="btn" style="cursor:pointer">
+          Загрузить БД (JSON)
+          <input id="fileImportDB" type="file" accept="application/json" style="display:none"/>
+        </label>
+        <button class="btn" id="btnClearDB">Очистить БД</button>
+      </div>
+      <div class="small" id="dbIoMsg" style="margin-top:8px"></div>
+
+      <div class="hr"></div>
+      <details>
+        <summary>Добавить игрока вручную (в фейк БД)</summary>
+        <div class="small" style="margin-top:8px">Добавленный игрок сразу появится в выпадающих списках и в таблице.</div>
+
+        <div class="inline3" style="margin-top:10px">
+          <div class="field">
+            <label>Nick</label>
+            <input id="add_nick" type="text" value="custom_1"/>
+          </div>
+          <div class="field">
+            <label>NoData?</label>
+            <select id="add_nodata">
+              <option value="0" selected>Нет</option>
+              <option value="1">Да</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Elo (если NoData=Нет)</label>
+            <input id="add_elo" type="number" step="1" value="2000"/>
+          </div>
+        </div>
+
+        <div class="inline3" style="margin-top:10px">
+          <div class="field"><label>KPR</label><input id="add_kpr" type="number" step="0.01" value="0.75"/></div>
+          <div class="field"><label>APR</label><input id="add_apr" type="number" step="0.01" value="0.12"/></div>
+          <div class="field"><label>DPR</label><input id="add_dpr" type="number" step="0.01" value="0.70"/></div>
+        </div>
+
+        <div class="inline3">
+          <div class="field"><label>ADR</label><input id="add_adr" type="number" step="1" value="85"/></div>
+          <div class="field"><label>MKPR</label><input id="add_mkpr" type="number" step="0.01" value="0.15"/></div>
+          <div class="field" style="align-self:end">
+            <button class="btn good" id="btnAddPlayer">Добавить игрока</button>
+          </div>
+        </div>
+
+        <div class="small" id="addPlayerMsg" style="margin-top:8px"></div>
+      </details>
+
+      <div class="hr"></div>
+      <details open>
+        <summary>Players (первые 20)</summary>
+        <div style="overflow:auto;margin-top:10px">
+          <table>
+            <thead><tr><th>id</th><th>nick</th><th>NoData</th><th>Elo</th><th>KPR</th><th>APR</th><th>DPR</th><th>ADR</th><th>MKPR</th></tr></thead>
+            <tbody id="dbTable"></tbody>
+          </table>
+        </div>
+      </details>
+      <details style="margin-top:10px">
+        <summary>Synergy edges (сыгранные пары)</summary>
+        <div class="small" id="edgesInfo" style="margin-top:10px"></div>
+      </details>
+    </div>
+  </div>
+</section>
+</main>
+
+<script>
+// Tabs
+const tabs = [
+  {btn:"tab-doc", panel:"panel-doc"},
+  {btn:"tab-calc", panel:"panel-calc"},
+  {btn:"tab-settings", panel:"panel-settings"},
+];
+function setTab(panelId){
+  for(const t of tabs){
+    const b=document.getElementById(t.btn), p=document.getElementById(t.panel);
+    const active = (t.panel===panelId);
+    b.setAttribute("aria-selected", active?"true":"false");
+    p.classList.toggle("active", active);
+  }
+  window.scrollTo({top:0,left:0,behavior:"smooth"});
+}
+for(const t of tabs){ document.getElementById(t.btn).addEventListener("click", ()=>setTab(t.panel)); }
+
+// Math helpers
+function clamp(x, lo, hi){ return Math.max(lo, Math.min(hi, x)); }
+function parseNum(v, fallback){
+  const str = String(v ?? '').trim().replace(',', '.');
+  const n = parseFloat(str);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function calcRatingFromStats(pl){
+  const kpr = Number(pl.KPR||0), apr = Number(pl.APR||0), dpr = Number(pl.DPR||0), adr = Number(pl.ADR||0), mkpr = Number(pl.MKPR||0);
+  let R = 0.6844811040150518 + kpr*0.65597945 + apr*0.31304591 - dpr*0.75999214 + adr*0.00370714 + mkpr*0.72169367;
+  return Math.max(R, 0);
+}
+
+function sigmoid(z){ return 1/(1+Math.exp(-z)); }
+function round(x,n=2){ const p=Math.pow(10,n); return Math.round(x*p)/p; }
+
+function calcBaseR(st){
+  let R = 0.6844811040150518
+    + st.KPR * 0.65597945
+    + st.APR * 0.31304591
+    - st.DPR * 0.75999214
+    + st.ADR * 0.00370714
+    + st.MKPR * 0.72169367;
+  return Math.max(R, 0);
+}
+function skillScoreFromR(Rcorr, cfg){
+  const t = clamp((Rcorr - cfg.Rmin)/(cfg.Rmax - cfg.Rmin), 0, 1);
+  return 100*t;
+}
+function softSkill(comm10, eng10){
+  const c = clamp(comm10/10, 0, 1);
+  const e = clamp(eng10/10, 0, 1);
+  return 100*((c+e)/2);
+}
+function quizAdj(qRaw, cfg){
+  const q = clamp((qRaw ?? cfg.Q0), cfg.Q_MIN, cfg.Q_MAX_RAW);
+  if(q >= cfg.Q0) return cfg.Q_MAX * clamp((q-cfg.Q0)/(cfg.Q_MAX_RAW-cfg.Q0), 0, 1);
+  return -cfg.Q_MAX * clamp((cfg.Q0-q)/(cfg.Q0-cfg.Q_MIN), 0, 1);
+}
+function aimAdj(aRaw, cfg){
+  const a = clamp((aRaw ?? cfg.A0), cfg.A_MIN, cfg.A_MAX_RAW);
+  if(a >= cfg.A0) return cfg.A_MAX * clamp((a-cfg.A0)/(cfg.A_MAX_RAW-cfg.A0), 0, 1);
+  return -cfg.A_MAX * clamp((cfg.A0-a)/(cfg.A0-cfg.A_MIN), 0, 1);
+}
+function noDataAdj(noData, ndAdj, cfg){
+  if(!noData) return 0;
+  const v = ndAdj ?? 0;
+  return cfg.ND_ALLOW_NEG ? clamp(v, -cfg.ND_MAX, cfg.ND_MAX) : clamp(v, 0, cfg.ND_MAX);
+}
+function calcPlayer(player, ui, cfg){
+  const NoData = !!player.NoData;
+  const R = NoData ? cfg.R_NODATA : calcBaseR(player);
+  let Rcorr = R, sig=null, dR=0;
+  if(!NoData){
+    sig = sigmoid((player.Elo - cfg.E0)/cfg.W);
+    dR = cfg.BETA * (2*sig - 1);
+    Rcorr = R + dR;
+  }
+  const SkillScore = skillScoreFromR(Rcorr, cfg);
+  const Soft = softSkill(ui.Comm, ui.Eng);
+  const BaseMix = (1-cfg.lambda)*SkillScore + cfg.lambda*Soft;
+  const Q = quizAdj(ui.QuizScore, cfg);
+  const A = aimAdj(ui.AimScore, cfg);
+  const ND = noDataAdj(NoData, ui.NoDataAdj, cfg);
+  const FinalRaw = BaseMix + Q + A + ND;
+  const Final = clamp(FinalRaw, 0, 100);
+  return {NoData,R,Rcorr,sig,dR,SkillScore,Soft,BaseMix,Q,A,ND,FinalRaw,Final};
+}
+function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+function std(arr){
+  const m = mean(arr);
+  const v = arr.reduce((s,x)=>s + (x-m)*(x-m), 0)/arr.length;
+  return Math.sqrt(v);
+}
+function teamScore(teamFinalPlayers, cfg){
+  const m = mean(teamFinalPlayers);
+  const sd = std(teamFinalPlayers);
+  return {mean:m, std:sd, score: m - cfg.gamma*sd};
+}
+
+// Fake DB
+let DB = {players:[], synergyEdges:[]};
+window.DB = DB;
+function randBetween(a,b){ return a + Math.random()*(b-a); }
+function rint(a,b){ return Math.floor(randBetween(a,b+1)); }
+function genNick(i){
+  const base = ["don","neo","zin","m0","pika","shad","kva","nrg","f0x","r4v","jett","loki","vex","kira","max","byte"];
+  return base[i % base.length] + "_" + String(1000+i);
+}
+function genPlayer(i){
+  const NoData = Math.random() < 0.18;
+  if(NoData){
+    return {id:"p"+(i+1), nick:genNick(i), NoData:true, Elo:null, KPR:null, APR:null, DPR:null, ADR:null, MKPR:null};
+  }
+  let Elo;
+  const roll = Math.random();
+  if(roll < 0.55) Elo = rint(800, 1700);
+  else if(roll < 0.90) Elo = rint(1700, 2800);
+  else Elo = rint(2800, 5000);
+  const eloT = clamp((Elo-800)/(5000-800), 0, 1);
+  const KPR = clamp(randBetween(0.55, 0.85) + 0.10*(eloT-0.5) + randBetween(-0.06, 0.06), 0.40, 1.05);
+  const DPR = clamp(randBetween(0.60, 0.82) - 0.10*(eloT-0.5) + randBetween(-0.06, 0.06), 0.45, 0.95);
+  const ADR = clamp(randBetween(65, 100) + 8*(eloT-0.5) + randBetween(-6, 6), 40, 120);
+  const APR = clamp(randBetween(0.06, 0.18) + randBetween(-0.03, 0.03), 0.00, 0.30);
+  const MKPR = clamp(randBetween(0.06, 0.22) + 0.05*(eloT-0.5) + randBetween(-0.04, 0.04), 0.00, 0.35);
+  return {id:"p"+(i+1), nick:genNick(i), NoData:false, Elo, KPR, APR, DPR, ADR, MKPR};
+}
+function genSynergyEdges(players){
+  const ids = players.map(p=>p.id);
+  const edges = new Set();
+  const addEdge = (a,b)=>{
+    if(!a || !b || a===b) return;
+    const k = a<b ? a+"|"+b : b+"|"+a;
+    edges.add(k);
+  };
+  if(ids.length >= 9){
+    const g1 = ids.slice(0,3), g2 = ids.slice(3,6);
+    for(let i=0;i<g1.length;i++)for(let j=i+1;j<g1.length;j++) addEdge(g1[i], g1[j]);
+    for(let i=0;i<g2.length;i++)for(let j=i+1;j<g2.length;j++) addEdge(g2[i], g2[j]);
+  }
+  for(let k=0;k<12;k++){
+    addEdge(ids[rint(0,ids.length-1)], ids[rint(0,ids.length-1)]);
+  }
+  return Array.from(edges).map(s=>{const [a,b]=s.split("|"); return {a,b};});
+}
+function regenDB(N=36){
+  const players=[]; for(let i=0;i<N;i++) players.push(genPlayer(i));
+  DB.players = players;
+  DB.synergyEdges = genSynergyEdges(players);
+}
+
+// Config
+let CFG = null; window.CFG = null;
+function readCfg(){
+  const cfg = {
+    Rmin: parseNum(document.getElementById("set_Rmin").value, 0.6844811),
+    Rmax: parseNum(document.getElementById("set_Rmax").value, 2.0),
+    R_NODATA: parseNum(document.getElementById("set_Rnodata").value, 1.0),
+    E0: parseNum(document.getElementById("set_E0").value, 2000),
+    W: Math.max(1, parseNum(document.getElementById("set_W").value, 700)),
+    BETA: parseNum(document.getElementById("set_BETA").value, 0.35),
+    lambda: clamp(parseNum(document.getElementById("set_lambda").value, 0.15), 0, 0.5),
+    gamma: clamp(parseNum(document.getElementById("set_gamma").value, 0.70), 0, 2),
+    tgreen: Math.max(0, parseNum(document.getElementById("set_tgreen").value, 1.5)),
+    tyellow: Math.max(0, parseNum(document.getElementById("set_tyellow").value, 3.0)),
+    ND_MAX: Math.max(0, parseNum(document.getElementById("set_NDmax").value, 12)),
+    ND_ALLOW_NEG: document.getElementById("set_NDneg").value === "1",
+    Q_MAX: parseNum(document.getElementById("set_Qmax").value, 15),
+    Q0: parseNum(document.getElementById("set_Q0").value, 10),
+    Q_MIN: parseNum(document.getElementById("set_Qmin").value, 0),
+    Q_MAX_RAW: parseNum(document.getElementById("set_Qmaxraw").value, 20),
+    A_MAX: parseNum(document.getElementById("set_Amax").value, 10),
+    A0: parseNum(document.getElementById("set_A0").value, 50),
+    A_MIN: parseNum(document.getElementById("set_Amin").value, 0),
+    A_MAX_RAW: parseNum(document.getElementById("set_Amaxraw").value, 100),
+  };
+  cfg.Rmax = Math.max(cfg.Rmin + 0.01, cfg.Rmax);
+  cfg.tyellow = Math.max(cfg.tgreen, cfg.tyellow);
+  return cfg;
+}
+function exportCfgJson(){
+  document.getElementById("cfgJson").value = JSON.stringify(CFG);
+}
+
+// DB rendering
+function playerById(id){ return DB.players.find(p=>p.id===id); }
+function countSynergyEdges(teamIds){
+  const set = new Set(teamIds.filter(Boolean));
+  let c=0;
+  for(const e of DB.synergyEdges){ if(set.has(e.a) && set.has(e.b)) c++; }
+  return c;
+}
+function involvedSynergyPlayers(teamIds){
+  const set = new Set(teamIds.filter(Boolean));
+  const bad = new Set();
+  for(const e of DB.synergyEdges){ if(set.has(e.a) && set.has(e.b)){ bad.add(e.a); bad.add(e.b); } }
+  return bad;
+}
+function renderDB(){
+  const sel = document.getElementById("pickPlayer");
+  sel.innerHTML = "";
+  DB.players.forEach(p=>{
+    const opt=document.createElement("option");
+    opt.value=p.id;
+    opt.textContent = `${p.nick} (${p.id})` + (p.NoData ? " — NoData" : ` — Elo ${p.Elo}`);
+    sel.appendChild(opt);
+  });
+
+  const tbody = document.getElementById("dbTable");
+  tbody.innerHTML = "";
+  DB.players.forEach(p=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML = `
+      <td class="mono">${p.id}</td>
+      <td>${p.nick}</td>
+      <td>${p.NoData?1:0}</td>
+      <td class="mono">${p.NoData?"":p.Elo}</td>
+      <td class="mono">${p.NoData?"":round(p.KPR,2)}</td>
+      <td class="mono">${p.NoData?"":round(p.APR,2)}</td>
+      <td class="mono">${p.NoData?"":round(p.DPR,2)}</td>
+      <td class="mono">${p.NoData?"":round(p.ADR,0)}</td>
+      <td class="mono">${p.NoData?"":round(p.MKPR,2)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("edgesInfo").innerHTML = `
+    <div>Всего сыгранных пар: <span class="k">${DB.synergyEdges.length}</span></div>
+    <div class="small" style="margin-top:6px">Проверка стака: если внутри 5 игроков найдено ≥ 2 ребра — это «стак» (нужно заменить одного).</div>
+  `;
+}
+
+// Teams
+const team = {
+  A:[null,null,null,null,null],
+  B:[null,null,null,null,null],
+  finalsA:[50,50,50,50,50],
+  finalsB:[50,50,50,50,50],
+};
+function outBox(label, value, hint, cls=""){
+  return `<div class="outbox ${cls}"><div class="hint">${label}<div class="small">${hint||""}</div></div><div class="val ${cls? "big":""}">${value}</div></div>`;
+}
+function getUiInputs(){
+  return {
+    Comm:Number(document.getElementById("comm").value),
+    Eng:Number(document.getElementById("eng").value),
+    NoDataAdj:Number(document.getElementById("ndAdj").value),
+    QuizScore:Number(document.getElementById("quiz").value),
+    AimScore:Number(document.getElementById("aim").value),
+  };
+}
+function renderTeams(){
+  const a=document.getElementById("teamA"), b=document.getElementById("teamB");
+  a.innerHTML=""; b.innerHTML="";
+  const build=(which, root, finals)=>{
+    for(let i=0;i<5;i++){
+      const div=document.createElement("div");
+      div.className="field";
+      div.innerHTML = `<label>Слот ${i+1}</label>
+        <select class="slotSel" data-team="${which}" data-idx="${i}"></select>
+        <div class="small">FinalPlayer: <span class="k" id="${which}final${i}">${round(finals[i],1)}</span></div>`;
+      root.appendChild(div);
+      const sel=div.querySelector("select");
+      const opt0=document.createElement("option");
+      opt0.value=""; opt0.textContent="— пусто —";
+      sel.appendChild(opt0);
+      DB.players.forEach(p=>{
+        const opt=document.createElement("option");
+        opt.value=p.id;
+        opt.textContent = `${p.nick} (${p.id})` + (p.NoData ? " — NoData" : ` — Elo ${p.Elo}`);
+        if(team[which][i]===p.id) opt.selected=true;
+        sel.appendChild(opt);
+      });
+    }
+  };
+  build("A", a, team.finalsA);
+  build("B", b, team.finalsB);
+
+  document.querySelectorAll(".slotSel").forEach(sel=>{
+    sel.onchange = (e)=>{
+      const which=e.target.dataset.team;
+      const idx=Number(e.target.dataset.idx);
+      team[which][idx] = e.target.value || null;
+      const pid = team[which][idx];
+      if(!pid){
+        if(which==="A") team.finalsA[idx]=50; else team.finalsB[idx]=50;
+        document.getElementById(`${which}final${idx}`).textContent = "50.0";
+        return;
+      }
+      const p = playerById(pid);
+      const res = calcPlayer(p, getUiInputs(), CFG);
+      if(which==="A") team.finalsA[idx]=res.Final; else team.finalsB[idx]=res.Final;
+      document.getElementById(`${which}final${idx}`).textContent = round(res.Final,1);
+    };
+  });
+}
+function calcAndShowPlayer(){
+  const id=document.getElementById("pickPlayer").value;
+  const p=playerById(id);
+  const ui=getUiInputs();
+  const res=calcPlayer(p, ui, CFG);
+
+  document.getElementById("playerOut").innerHTML = `
+    ${outBox("FinalPlayer", round(res.Final,1), "Итог 0..100", "final")}
+    ${outBox("SkillScore", round(res.SkillScore,1), "Из Rcorr → 0..100")}
+    ${outBox("SoftSkill", round(res.Soft,1), "Comm/Eng")}
+    ${outBox("QuizAdj", round(res.Q,1), "±Q_MAX")}
+    ${outBox("AimAdj", round(res.A,1), "±A_MAX")}
+    ${outBox("NoDataAdj", round(res.ND,1), "Только NoData")}
+  `;
+  document.getElementById("devOut").innerHTML = `
+    <div class="mono">NoData=${res.NoData?1:0}</div>
+    <div class="mono">R=${round(res.R,4)}; sig=${res.sig===null?"":round(res.sig,4)}; dR=${round(res.dR,4)}; Rcorr=${round(res.Rcorr,4)}</div>
+    <div class="mono">SkillScore=100*clamp((Rcorr-Rmin)/(Rmax-Rmin),0..1)=${round(res.SkillScore,2)}</div>
+    <div class="mono">BaseMix=(1-λ)*SkillScore + λ*SoftSkill=${round(res.BaseMix,2)}</div>
+    <div class="mono">FinalRaw=BaseMix+QuizAdj+AimAdj+ND=${round(res.FinalRaw,2)}; Final=${round(res.Final,2)}</div>
+  `;
+  document.getElementById("calcMsg").textContent = p.NoData ? "NoData=1: R=R_NODATA, Elo-коррекция не применяется." : "Faceit: R по стате + Elo-коррекция.";
+  return {p,ui,res};
+}
+function writeToSlot(){
+  const calc=calcAndShowPlayer();
+  const which=document.getElementById("pickTeam").value;
+  const idx=Number(document.getElementById("pickSlot").value)-1;
+  team[which][idx] = calc.p.id;
+  if(which==="A") team.finalsA[idx]=calc.res.Final; else team.finalsB[idx]=calc.res.Final;
+  renderTeams();
+}
+function calcTeam(which){
+  const root=document.getElementById(which==="A"?"teamA":"teamB");
+  const out=document.getElementById(which==="A"?"teamAOut":"teamBOut");
+  // clear highlights
+  root.querySelectorAll("select").forEach(s=>s.classList.remove("badline","warnline"));
+
+  const ids=team[which].slice();
+  const edges=countSynergyEdges(ids);
+
+  if(edges>=2){
+    const bad=involvedSynergyPlayers(ids);
+    root.querySelectorAll("select").forEach(s=>{
+      if(s.value && bad.has(s.value)) s.classList.add("badline");
+    });
+    out.innerHTML = `<div class="outbox badline"><div class="hint"><b>Ошибка</b></div>
+      <div class="small">Внутри команды найдено <span class="k">${edges}</span> сыгранных связей (ребер). Это означает &gt;2 сыгранных игроков. Нужно заменить одного.</div></div>`;
+    return null;
+  }
+  if(edges===1){
+    const bad=involvedSynergyPlayers(ids);
+    root.querySelectorAll("select").forEach(s=>{
+      if(s.value && bad.has(s.value)) s.classList.add("warnline");
+    });
+  }
+
+  const finals = which==="A" ? team.finalsA : team.finalsB;
+  const res = teamScore(finals, CFG);
+  out.innerHTML = `
+    <div class="out">
+      ${outBox("TeamScore", round(res.score,1), "Mean − γ·Std", "final")}
+      ${outBox("Mean", round(res.mean,1), "Средняя сила")}
+      ${outBox("Std", round(res.std,1), "Перекос")}
+      ${outBox("Synergy edges", edges, edges===1?"Одна сыгранная пара (OK)":"Нет сыгранных")}
+    </div>`;
+  return res;
+}
+let lastA=null,lastB=null;
+function compareTeams(){
+  const out=document.getElementById("compareOut");
+  if(!lastA || !lastB){ out.innerHTML=`<div class="outbox"><div class="small">Сначала посчитайте TeamScore A и TeamScore B.</div></div>`; return; }
+  const d=Math.abs(lastA.score-lastB.score);
+  let cls="", msg="Команды равны";
+  if(d>CFG.tyellow){ cls="badline"; msg="Команды НЕ равны — пересоберите"; }
+  else if(d>CFG.tgreen){ cls="warnline"; msg="Погранично — можно улучшить баланс"; }
+  out.innerHTML = `<div class="outbox ${cls}" style="margin-top:10px">
+    <div class="hint"><b>Δ = |A − B| = <span class="k">${round(d,2)}</span></b> — ${msg}</div>
+    <div class="small">Пороги: green ≤ ${CFG.tgreen}, yellow ≤ ${CFG.tyellow}.</div>
+  </div>`;
+}
+function fillRandomTeams(){
+  const ids=DB.players.map(p=>p.id).sort(()=>Math.random()-0.5);
+  team.A=ids.slice(0,5); team.B=ids.slice(5,10);
+  const ui=getUiInputs();
+  team.finalsA = team.A.map(id=>calcPlayer(playerById(id), ui, CFG).Final);
+  team.finalsB = team.B.map(id=>calcPlayer(playerById(id), ui, CFG).Final);
+  renderTeams();
+  document.getElementById("teamAOut").innerHTML="";
+  document.getElementById("teamBOut").innerHTML="";
+  document.getElementById("compareOut").innerHTML="";
+  lastA=null; lastB=null;
+}
+function resetTeams(){
+  team.A=[null,null,null,null,null]; team.B=[null,null,null,null,null];
+  team.finalsA=[50,50,50,50,50]; team.finalsB=[50,50,50,50,50];
+  renderTeams();
+  document.getElementById("teamAOut").innerHTML="";
+  document.getElementById("teamBOut").innerHTML="";
+  document.getElementById("compareOut").innerHTML="";
+  lastA=null; lastB=null;
+}
+
+// Sliders display
+function hookSliders(){
+  const comm=document.getElementById("comm"), eng=document.getElementById("eng");
+  const commVal=document.getElementById("commVal"), engVal=document.getElementById("engVal");
+  comm.oninput=()=>{ commVal.textContent=comm.value; };
+  eng.oninput=()=>{ engVal.textContent=eng.value; };
+}
+
+// Settings actions
+
+// ---------------------
+// One-pager charts
+// ---------------------
+function drawLineChart(canvas, lines, opts){
+  const ctx = canvas.getContext("2d");
+  const dpr = (window.devicePixelRatio||1);
+
+  const rect = canvas.getBoundingClientRect();
+  const cssW = rect.width;
+  const cssH = rect.height;
+
+  if(!cssW || cssW < 10 || !cssH || cssH < 10){
+    return;
+  }
+
+  // Do NOT change CSS size here. Only match internal buffer to CSS size * dpr.
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const padL = 70*dpr, padR = 20*dpr, padT = 18*dpr, padB = 54*dpr;
+  const inset = 6*dpr;
+  const plotW = W - padL - padR - inset*2;
+  const plotH = H - padT - padB - inset*2;
+
+  const xmin = opts.xmin, xmax = opts.xmax, ymin = opts.ymin, ymax = opts.ymax;
+
+  function x2px(x){ return padL + inset + (x - xmin) / (xmax - xmin) * plotW; }
+  function y2px(y){
+    const yy = Math.max(ymin, Math.min(ymax, y));
+    return padT + inset + (1 - (yy - ymin) / (ymax - ymin)) * plotH;
+  }
+
+  // grid
+  ctx.strokeStyle = "rgba(232,238,246,.10)";
+  ctx.lineWidth = 1*dpr;
+  const gridN = 4;
+  for(let i=0;i<=gridN;i++){
+    const gx = padL + inset + (plotW/gridN)*i;
+    const gy = padT + inset + (plotH/gridN)*i;
+    ctx.beginPath(); ctx.moveTo(gx, padT+inset); ctx.lineTo(gx, padT+inset+plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL+inset, gy); ctx.lineTo(padL+inset+plotW, gy); ctx.stroke();
+  }
+
+  // ticks & labels
+  ctx.fillStyle = "rgba(232,238,246,.78)";
+  ctx.font = `${11*dpr}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace`;
+
+  // 5 y-ticks
+  const yTicks = Array.from({length:5}, (_,i)=>ymin + (ymax-ymin)*(i/4));
+  yTicks.forEach(v=>{
+    const py = y2px(v);
+    const lab = (Math.round(v*1000)/1000).toString();
+    ctx.fillText(lab, padL - 42*dpr, py+4*dpr);
+  });
+
+  // 5 x-ticks
+  const xTicks = Array.from({length:5}, (_,i)=>xmin + (xmax-xmin)*(i/4));
+  xTicks.forEach(v=>{
+    const px = x2px(v);
+    const lab = Math.round(v).toString();
+    const tx = Math.max(padL, Math.min(padL + inset + plotW - 28*dpr, px-12*dpr));
+    ctx.fillText(lab, tx, H-26*dpr);
+  });
+
+  // axis titles
+  if(opts.ylabel){
+    ctx.save();
+    ctx.translate(padL - 52*dpr, padT + inset + plotH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(opts.ylabel, 0, 0);
+    ctx.restore();
+  }
+  if(opts.xlabel){
+    ctx.fillText(opts.xlabel, padL + inset + plotW/2 - 18*dpr, H-10*dpr);
+  }
+
+  // lines
+  for(const line of lines){
+    if(line.pointOnly){
+      // scatter points
+      ctx.fillStyle = line.color || "rgba(255,255,255,.85)";
+      for(const p of line.data){
+        const px = x2px(p.x), py = y2px(p.y);
+        ctx.beginPath();
+        ctx.arc(px, py, 3*dpr, 0, Math.PI*2);
+        ctx.fill();
+        if(p.label){
+          ctx.fillText(String(p.label).slice(0,10), px + 6*dpr, py - 6*dpr);
+        }
+      }
+      continue;
+    }
+
+    ctx.strokeStyle = line.color || "rgba(103,212,255,.9)";
+    ctx.lineWidth = 2*dpr;
+    ctx.beginPath();
+    line.data.forEach((p,idx)=>{
+      const px = x2px(p.x), py = y2px(p.y);
+      if(idx===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    });
+    ctx.stroke();
+
+    if(line.label){
+      const last = line.data[line.data.length-1];
+      ctx.fillStyle = line.color || "rgba(103,212,255,.9)";
+      ctx.fillText(line.label, x2px(last.x) - 90*dpr, y2px(last.y) - 8*dpr);
+    }
+  }
+
+  // marker at E0
+  if(opts.markX != null){
+    const mx = x2px(opts.markX);
+    ctx.strokeStyle = "rgba(124,255,157,.55)";
+    ctx.setLineDash([6*dpr,6*dpr]);
+    ctx.beginPath(); ctx.moveTo(mx, padT+inset); ctx.lineTo(mx, padT+inset+plotH); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function drawOnePagerCharts(cfg){
+  // If one-pager is not visible yet, retry shortly
+  const probe = document.getElementById("ch_sig");
+  if(probe && (!probe.clientWidth || probe.clientWidth < 10)){
+    setTimeout(()=>{ drawOnePagerCharts(cfg); }, 120);
+    return;
+  }
+
+  const ELO_MIN = 800, ELO_MAX = 5000, step = 50;
+
+  const sigData = [];
+  const dRData = [];
+  for(let e=ELO_MIN; e<=ELO_MAX; e+=step){
+    const s = sigmoid((e - cfg.E0)/cfg.W);
+    sigData.push({x:e, y:s});
+    dRData.push({x:e, y: cfg.BETA * (2*s - 1)});
+  }
+
+  const c1 = document.getElementById("ch_sig");
+  if(c1){
+    drawLineChart(c1, [{data:sigData, label:"sig", color:"rgba(103,212,255,.9)"}], {
+      xmin:ELO_MIN, xmax:ELO_MAX, ymin:0, ymax:1, xlabel:"Elo", ylabel:"sig", markX:cfg.E0
+    });
+  }
+
+  const c2 = document.getElementById("ch_dr");
+  if(c2){
+    const lim = 0.5;
+    drawLineChart(c2, [{data:dRData, label:"dR", color:"rgba(255,204,102,.9)"}], {
+      xmin:ELO_MIN, xmax:ELO_MAX, ymin:-lim, ymax:lim, xlabel:"Elo", ylabel:"dR", markX:cfg.E0
+    });
+  }
+
+  const c3 = document.getElementById("ch_rcorr");
+  if(c3){
+    const baseRs = [1.0, 1.2, 1.4];
+    const colors = ["rgba(103,212,255,.9)","rgba(124,255,157,.9)","rgba(255,204,102,.9)"];
+    const lines = baseRs.map((R, idx)=>{
+      const arr = [];
+      for(let e=ELO_MIN; e<=ELO_MAX; e+=step){
+        const s = sigmoid((e - cfg.E0)/cfg.W);
+        const dR = cfg.BETA * (2*s - 1);
+        arr.push({x:e, y: R + dR});
+      }
+      return {data:arr, label:`R=${R.toFixed(1)}`, color:colors[idx]};
+    });
+    const samples = [];
+    if(window.DB && Array.isArray(window.DB.players)){
+      const pick = window.DB.players.slice(-5);
+      for(const pl of pick){
+        if(pl && pl.NoData) continue;
+        if(pl && Number.isFinite(pl.Elo) && pl.KPR!=null){
+          const Rb = calcRatingFromStats(pl); // uses existing function
+          const sigp = sigmoid((pl.Elo - cfg.E0)/cfg.W);
+          const dRp = cfg.BETA * (2*sigp - 1);
+          const rc = Rb + dRp;
+          samples.push({x: pl.Elo, y: rc, label: pl.nick || pl.id});
+        }
+      }
+    }
+    // scatter series (drawn as points)
+    if(samples.length){
+      lines.push({data: samples, color:"rgba(255,255,255,.85)", label:"samples", pointOnly:true});
+    }
+
+    drawLineChart(c3, lines, { xmin:ELO_MIN, xmax:ELO_MAX, ymin:0, ymax:2.2, xlabel:"Elo", ylabel:"Rcorr", markX:cfg.E0 });
+  }
+}
+function applyCfg(){
+  CFG = readCfg(); window.CFG = CFG;
+  exportCfgJson();
+  document.getElementById("cfgMsg").textContent = "Настройки применены.";
+  drawOnePagerCharts(CFG);
+}
+document.getElementById("btnApplyCfg").onclick=()=>applyCfg();
+document.getElementById("btnExportCfg").onclick=()=>exportCfgJson();
+document.getElementById("btnRegenDB").onclick=()=>{ regenDB(5); renderDB(); renderTeams(); };
+// DB export/import
+function exportDB(){
+  const payload = JSON.stringify(DB, null, 2);
+  const blob = new Blob([payload], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "cs_streamer_rating_fake_db.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  const msg = document.getElementById("dbIoMsg");
+  if(msg) msg.textContent = "БД скачана как JSON.";
+}
+function applyImportedDB(obj){
+  if(!obj || !Array.isArray(obj.players) || !Array.isArray(obj.synergyEdges)){
+    throw new Error("Неверный формат: ожидаем {players:[], synergyEdges:[]}");
+  }
+  DB.players = obj.players;
+  DB.synergyEdges = obj.synergyEdges;
+  window.DB = DB;
+}
+function clearDB(){
+  DB.players = [];
+  DB.synergyEdges = [];
+  window.DB = DB;
+  renderDB();
+  renderTeams();
+  const msg = document.getElementById("dbIoMsg");
+  if(msg) msg.textContent = "БД очищена.";
+}
+document.getElementById("btnExportDB").onclick = ()=>exportDB();
+document.getElementById("btnClearDB").onclick = ()=>clearDB();
+document.getElementById("fileImportDB").addEventListener("change", async (ev)=>{
+  const f = ev.target.files && ev.target.files[0];
+  if(!f) return;
+  try{
+    const txt = await f.text();
+    const obj = JSON.parse(txt);
+    applyImportedDB(obj);
+    renderDB();
+    renderTeams();
+    const msg = document.getElementById("dbIoMsg");
+    if(msg) msg.textContent = `БД загружена: игроков ${DB.players.length}, связей ${DB.synergyEdges.length}.`;
+  }catch(err){
+    const msg = document.getElementById("dbIoMsg");
+    if(msg) msg.textContent = "Ошибка загрузки БД: " + (err && err.message ? err.message : err);
+  }finally{
+    ev.target.value = "";
+  }
+});
+
+// Add manual player
+function nextPlayerId(){
+  // ids like p<number>
+  let maxN = 0;
+  for(const p of DB.players){
+    const m = /^p(\d+)$/.exec(p.id);
+    if(m) maxN = Math.max(maxN, Number(m[1]));
+  }
+  return "p" + (maxN + 1);
+}
+function sanitizeNick(s){
+  s = (s||"").trim();
+  if(!s) return "custom_" + Math.floor(Math.random()*10000);
+  return s.slice(0, 32);
+}
+function addManualPlayer(){
+  const nodata = document.getElementById("add_nodata").value === "1";
+  const nick = sanitizeNick(document.getElementById("add_nick").value);
+  const id = nextPlayerId();
+
+  let player;
+  if(nodata){
+    player = {id, nick, NoData:true, Elo:null, KPR:null, APR:null, DPR:null, ADR:null, MKPR:null};
+  }else{
+    const Elo = Number(document.getElementById("add_elo").value);
+    const KPR = Number(document.getElementById("add_kpr").value);
+    const APR = Number(document.getElementById("add_apr").value);
+    const DPR = Number(document.getElementById("add_dpr").value);
+    const ADR = Number(document.getElementById("add_adr").value);
+    const MKPR = Number(document.getElementById("add_mkpr").value);
+
+    // basic validation/clamp to avoid crazy values
+    player = {
+      id,
+      nick,
+      NoData:false,
+      Elo: Math.max(0, Math.round(Elo)),
+      KPR: clamp(KPR, 0, 3),
+      APR: clamp(APR, 0, 3),
+      DPR: clamp(DPR, 0, 3),
+      ADR: clamp(ADR, 0, 300),
+      MKPR: clamp(MKPR, 0, 3),
+    };
+  }
+
+  DB.players.push(player);
+
+  // Re-render lists/table/teams
+  renderDB();
+  renderTeams();
+
+  // Select newly added player in picker
+  const pick = document.getElementById("pickPlayer");
+  pick.value = id;
+
+  document.getElementById("addPlayerMsg").textContent =
+    `Добавлен игрок ${nick} (${id})` + (nodata ? " — NoData" : ` — Elo ${player.Elo}`);
+}
+document.getElementById("btnAddPlayer").onclick = ()=>addManualPlayer();
+
+// UX: disable stat inputs when NoData=Да
+function syncAddForm(){
+  const nodata = document.getElementById("add_nodata").value === "1";
+  const ids = ["add_elo","add_kpr","add_apr","add_dpr","add_adr","add_mkpr"];
+  for(const x of ids){
+    const el = document.getElementById(x);
+    el.disabled = nodata;
+    el.style.opacity = nodata ? "0.55" : "1";
+  }
+}
+document.getElementById("add_nodata").onchange = ()=>syncAddForm();
+syncAddForm();
+
+document.getElementById("btnCalc").onclick=()=>calcAndShowPlayer();
+document.getElementById("btnWrite").onclick=()=>writeToSlot();
+document.getElementById("btnRand").onclick=()=>{
+  const sel=document.getElementById("pickPlayer");
+  sel.value = DB.players[rint(0,DB.players.length-1)].id;
+  calcAndShowPlayer();
+};
+document.getElementById("btnTeamA").onclick=()=>{ lastA=calcTeam("A"); };
+document.getElementById("btnTeamB").onclick=()=>{ lastB=calcTeam("B"); };
+document.getElementById("btnCompare").onclick=()=>compareTeams();
+document.getElementById("btnFillRandom").onclick=()=>fillRandomTeams();
+document.getElementById("btnResetTeams").onclick=()=>resetTeams();
+
+// Init
+regenDB(5);
+applyCfg();
+renderDB();
+renderTeams();
+hookSliders();
+window.addEventListener('resize', ()=>{ if(CFG) drawOnePagerCharts(CFG); });
+</script>
+</body>
+</html>
