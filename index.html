@@ -73,17 +73,22 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 }
 
 .tableScroll{max-height:420px;overflow:auto;border:1px solid rgba(232,238,246,.10);border-radius:14px}
+
+.hideDetails .col-detail{display:none}
+.dbTopCard{height:360px;overflow:hidden}
+.dbTopCard .chartCanvasWide{aspect-ratio:1.8/1}
 </style>
 </head>
 <body>
 <header>
   <h1>CS Streamer Rating — DB Demo + Калькулятор (v4)</h1>
-  <p class="sub">Фейковая база игроков + расчёт силы игрока по HLTV-like формуле + Elo-коррекция (вариант B) + SoftSkill + Quiz/Aim + ручной бонус для NoData. Команды: TeamScore = Mean − γ·Std, плюс проверка «сыгранных игроков &gt; 2» по связям из БД.</p>
+  <p class="sub">Фейковая база игроков + расчёт силы игрока по HLTV-like формуле + Elo-коррекция (вариант B) + SoftSkill + Aim + ручной бонус для NoData. Команды: TeamScore = Mean − γ·Std, плюс проверка «сыгранных игроков &gt; 2» по связям из БД.</p>
   <div class="tabs" role="tablist" aria-label="Режимы">
     <button class="tabbtn" id="tab-doc" role="tab" aria-controls="panel-doc" aria-selected="true">One-pager</button>
     <button class="tabbtn" id="tab-calc" role="tab" aria-controls="panel-calc" aria-selected="false">Калькулятор</button>
     <button class="tabbtn" id="tab-settings" role="tab" aria-controls="panel-settings" aria-selected="false">Настройки</button>
-  </div>
+      <button class="tabbtn" id="tab-db" role="tab" aria-controls="panel-db" aria-selected="false">БД</button>
+</div>
 </header>
 
 <main>
@@ -101,7 +106,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       <div class="hr"></div>
       <div class="k">BaseMix = (1−λ)·SkillScore + λ·SoftSkill</div>
       <div class="hr"></div>
-      <div class="k">FinalPlayer = clamp(BaseMix + QuizAdj + AimAdj + ND, 0..100)</div>
+      <div class="k">FinalPlayer = clamp(BaseMix + AimAdj + ND, 0..100)</div>
     </div>
   </div>
   <div class="hr"></div>
@@ -137,8 +142,8 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 
       <p style="margin:0 0 8px"><b>5) Субъективные слои (опционально)</b></p>
       <p style="margin:0 0 10px">
-        Далее можно добавить: <span class="k">SoftSkill</span>, <span class="k">QuizAdj</span>, <span class="k">AimAdj</span>, <span class="k">NoDataAdj</span>.
-        Итог: <span class="k">FinalPlayer=clamp(BaseMix+QuizAdj+AimAdj+ND,0..100)</span>.
+        Далее можно добавить: <span class="k">SoftSkill</span>, <span class="k">0</span>, <span class="k">AimAdj</span>, <span class="k">NoDataAdj</span>.
+        Итог: <span class="k">FinalPlayer=clamp(BaseMix+0+AimAdj+ND,0..100)</span>.
       </p>
 
       <details>
@@ -171,7 +176,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
         <li>Считаем <span class="k">sig(Elo)</span> — S-образную кривую (сигмоиду), которая почти плоская на краях и наиболее чувствительна в середине.</li>
         <li>Считаем поправку <span class="k">dR</span> и получаем <span class="k">Rcorr = R + dR</span>.</li>
         <li>Переводим <span class="k">Rcorr</span> в шкалу 0–100 → <span class="k">SkillScore</span>.</li>
-        <li>Дальше добавляем субъективные слои (soft/quiz/aim/NoDataAdj) — они остаются выключаемыми/калибруемыми отдельно.</li>
+        <li>Дальше добавляем субъективные слои (soft/aim/NoDataAdj) — они остаются выключаемыми/калибруемыми отдельно.</li>
       </ol>
 
       <div class="hr"></div>
@@ -230,7 +235,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
     <div class="small">
       <div class="k">Mean = avg(FinalPlayer1..5); Std = sqrt( Σ(xi−Mean)^2 / 5 ); TeamScore = Mean − γ·Std</div>
       <div class="hr"></div>
-      <div><b>Проверка стака</b>: считаем число сыгранных ребер внутри 5 игроков (synergyEdges из БД). Если ребер ≥ 2 → ошибка «в команде больше 2 сыгранных игроков».</div>
+      <div><b>Примечание:</b> командная часть сейчас вспомогательная для понимания баланса. Проверки сыгранности временно не используем.</div>
     </div>
   </div>
 </section>
@@ -271,7 +276,6 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       <details style="margin-top:10px">
         <summary>Тесты</summary>
         <div class="inline">
-          <div class="field"><label>QuizScore</label><input id="quiz" type="number" step="1" value="10"/></div>
           <div class="field"><label>AimScore</label><input id="aim" type="number" step="1" value="50"/></div>
         </div>
       </details>
@@ -329,6 +333,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
   </div>
 </section>
 
+
 <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings">
   <div class="grid2">
     <div class="card">
@@ -351,6 +356,12 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
         <div class="field"><label>BETA</label><input id="set_BETA" type="number" step="0.01" value="0.12"/></div>
       </div>
 
+      <div class="field">
+        <label>PointsN (точек на графике 3)</label>
+        <input id="set_ptsN" type="number" value="5" step="1" min="0"/>
+        <div class="small">Сколько игроков из БД рисуем точками на графике Rcorr(Elo) (0 = без точек).</div>
+      </div>
+
       <h3>Soft / Team</h3>
       <div class="inline3">
         <div class="field"><label>λ</label><input id="set_lambda" type="number" step="0.01" min="0" max="0.5" value="0.15"/></div>
@@ -367,18 +378,6 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 
       <div class="hr"></div>
 
-      <h3>Quiz</h3>
-      <div class="inline3">
-        <div class="field"><label>Q_MAX</label><input id="set_Qmax" type="number" step="1" value="15"/></div>
-        <div class="field"><label>Q0</label><input id="set_Q0" type="number" step="1" value="10"/></div>
-        <div class="field"><label>Q_MIN</label><input id="set_Qmin" type="number" step="1" value="0"/></div>
-      </div>
-      <div class="inline3">
-        <div class="field"><label>Q_MAX_RAW</label><input id="set_Qmaxraw" type="number" step="1" value="20"/></div>
-        <div class="field"><div class="small">QuizAdj линейно вокруг Q0.</div></div>
-        <div></div>
-      </div>
-
       <h3>Aim</h3>
       <div class="inline3">
         <div class="field"><label>A_MAX</label><input id="set_Amax" type="number" step="1" value="10"/></div>
@@ -391,19 +390,76 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
         <div></div>
       </div>
 
-      <div class="row" style="margin-top:10px">
+      <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
         <button class="btn primary" id="btnApplyCfg">Применить настройки</button>
-        <button class="btn" id="btnExportCfg">Экспорт cfg JSON</button>
       </div>
-      <div class="field"><label>cfg JSON</label><input id="cfgJson" type="text" /></div>
-      <div class="small" id="cfgMsg"></div>
+      <div class="small" id="cfgMsg" style="margin-top:8px"></div>
     </div>
 
     <div class="card">
-      <h2>Фейковая БД</h2>
-      <div class="small">Сгенерировано N игроков и список сыгранных пар (synergy edges). В реальной системе это будет ваша таблица many-to-many.</div>
+      <h2>Импорт / экспорт</h2>
+      <div class="small">Файлы: отдельно cfg и отдельно DB.</div>
+
       <div class="hr"></div>
-      <div class="row"><button class="btn" id="btnRegenDB">Перегенерировать БД</button></div>
+
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <button class="btn" id="btnExportCfg">Скачать cfg (JSON)</button>
+        <label class="btn" style="cursor:pointer">
+          Загрузить cfg (JSON)
+          <input id="fileImportCfg" type="file" accept="application/json" style="display:none"/>
+        </label>
+      </div>
+
+      <div class="field" style="margin-top:10px">
+        <label>cfg JSON (preview)</label>
+        <input id="cfgJson" type="text"/>
+      </div>
+
+      <div class="hr"></div>
+
+      <details>
+        <summary>Как калибровать (коротко)</summary>
+        <div class="small" style="margin-top:8px">
+          • Если на высоком Elo игроки недооцениваются → ↑ <span class="k">BETA</span> или сместить <span class="k">E0</span> вправо.<br/>
+          • Если разница в средней зоне слишком резкая → ↑ <span class="k">W</span> (плавнее).<br/>
+          • Если часто клиппит в 0/100 → поправьте <span class="k">Rmin/Rmax</span>.<br/>
+          • Soft влияет слишком сильно/слабо → <span class="k">λ</span>.
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+  <section class="panel" id="panel-db"  <section class="panel" id="panel-db">
+    <div class="card">
+      <h2>База данных игроков</h2>
+      <div class="small">Добавляйте игроков, импортируйте/экспортируйте JSON. Расчёты используют текущие настройки модели.</div>
+      <div class="hr"></div>
+
+      <div class="grid2">
+        <div class="card dbTopCard">
+          <h3>Мини-график — Rcorr(Elo) (без точек)</h3>
+          <div class="small">То же, что на one-pager: линии R=1.0/1.2/1.4.</div>
+          <canvas id="ch_db_rcorrmini" class="chartCanvasWide"></canvas>
+        </div>
+        <div class="card dbTopCard">
+          <h3>Ключевые настройки (быстро)</h3>
+          <div class="small">E0/W/BETA/Rmin/Rmax — применяются ко всем расчётам.</div>
+          <div class="inline">
+            <div class="field"><label>E0</label><input id="db_E0" type="number" step="1"/></div>
+            <div class="field"><label>W</label><input id="db_W" type="number" step="1"/></div>
+            <div class="field"><label>BETA</label><input id="db_BETA" type="number" step="0.01"/></div>
+            <div class="field"><label>Rmin</label><input id="db_Rmin" type="number" step="0.001"/></div>
+            <div class="field"><label>Rmax</label><input id="db_Rmax" type="number" step="0.001"/></div>
+          </div>
+          <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
+            <button class="btn good" id="btnApplyCfgFromDB">Применить</button>
+            
+          </div>
+          <div class="small" id="dbCfgMsg" style="margin-top:8px"></div>
+        </div>
+      </div>
+
       <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
         <button class="btn" id="btnExportDB">Скачать БД (JSON)</button>
         <label class="btn" style="cursor:pointer">
@@ -416,7 +472,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 
       <div class="hr"></div>
       <details>
-        <summary>Добавить игрока вручную (в фейк БД)</summary>
+        <summary>Добавить игрока вручную</summary>
         <div class="small" style="margin-top:8px">Добавленный игрок сразу появится в выпадающих списках и в таблице.</div>
 
         <div class="inline3" style="margin-top:10px">
@@ -447,7 +503,8 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
           <div class="field"><label>ADR</label><input id="add_adr" type="number" step="1" value="85"/></div>
           <div class="field"><label>MKPR</label><input id="add_mkpr" type="number" step="0.01" value="0.15"/></div>
           <div class="field" style="align-self:end">
-            <button class="btn good" id="btnAddPlayer">Добавить игрока</button>
+            <button class="btn" id="btnRandStats">Random stats</button>
+<button class="btn good" id="btnAddPlayer">Добавить игрока</button>
           </div>
         </div>
 
@@ -455,22 +512,47 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       </details>
 
       <div class="hr"></div>
-      <details open>
-        <summary>Players (первые 20)</summary>
-        <div style="overflow:auto;margin-top:10px">
-          <table>
-            <thead><tr><th>id</th><th>nick</th><th>NoData</th><th>Elo</th><th>KPR</th><th>APR</th><th>DPR</th><th>ADR</th><th>MKPR</th></tr></thead>
-            <tbody id="dbTable"></tbody>
-          </table>
+      
+      <div class="row" style="justify-content:space-between;align-items:center;margin-top:12px">
+        <div class="row" style="gap:10px;align-items:center">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="dbShowDetails" checked/>
+            <span class="small">Показать подробные поля (статы + субъективные)</span>
+          </label>
         </div>
-      </details>
-      <details style="margin-top:10px">
-        <summary>Synergy edges (сыгранные пары)</summary>
-        <div class="small" id="edgesInfo" style="margin-top:10px"></div>
-      </details>
+      </div>
+
+      <div id="dbTableWrap" class="tableScroll" style="margin-top:10px">
+        <table id="dbFullTable">
+          <thead>
+            <tr>
+              <th>id</th>
+              <th>nick</th>
+              <th>Elo</th>
+              <th class="col-detail">KPR</th>
+              <th class="col-detail">APR</th>
+              <th class="col-detail">DPR</th>
+              <th class="col-detail">ADR</th>
+              <th class="col-detail">MKPR</th>
+              <th class="col-detail">Comm</th>
+              <th class="col-detail">Eng</th>
+              <th class="col-detail">AimAdj</th>
+              <th class="col-detail">NoDataAdj</th>
+              <th>R(base)</th>
+              <th>Rcorr</th>
+              <th>SkillScore</th>
+              <th>FinalPlayer</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="dbTable"></tbody>
+        </table>
+      </div>
+
+      
     </div>
-  </div>
-</section>
+  </section>
+
 </main>
 
 <script>
@@ -479,6 +561,7 @@ const tabs = [
   {btn:"tab-doc", panel:"panel-doc"},
   {btn:"tab-calc", panel:"panel-calc"},
   {btn:"tab-settings", panel:"panel-settings"},
+  {btn:"tab-db", panel:"panel-db"},
 ];
 function setTab(panelId){
   for(const t of tabs){
@@ -488,6 +571,15 @@ function setTab(panelId){
     p.classList.toggle("active", active);
   }
   window.scrollTo({top:0,left:0,behavior:"smooth"});
+  if(CFG){
+    if(panelId==="panel-doc"){
+      setTimeout(()=>drawOnePagerCharts(CFG), 80);
+    }
+    if(panelId==="panel-db"){
+      fillDbQuickFromCfg();
+      setTimeout(()=>drawDbMiniChart(CFG), 80);
+    }
+  }
 }
 for(const t of tabs){ document.getElementById(t.btn).addEventListener("click", ()=>setTab(t.panel)); }
 
@@ -526,11 +618,6 @@ function softSkill(comm10, eng10){
   const e = clamp(eng10/10, 0, 1);
   return 100*((c+e)/2);
 }
-function quizAdj(qRaw, cfg){
-  const q = clamp((qRaw ?? cfg.Q0), cfg.Q_MIN, cfg.Q_MAX_RAW);
-  if(q >= cfg.Q0) return cfg.Q_MAX * clamp((q-cfg.Q0)/(cfg.Q_MAX_RAW-cfg.Q0), 0, 1);
-  return -cfg.Q_MAX * clamp((cfg.Q0-q)/(cfg.Q0-cfg.Q_MIN), 0, 1);
-}
 function aimAdj(aRaw, cfg){
   const a = clamp((aRaw ?? cfg.A0), cfg.A_MIN, cfg.A_MAX_RAW);
   if(a >= cfg.A0) return cfg.A_MAX * clamp((a-cfg.A0)/(cfg.A_MAX_RAW-cfg.A0), 0, 1);
@@ -553,12 +640,11 @@ function calcPlayer(player, ui, cfg){
   const SkillScore = skillScoreFromR(Rcorr, cfg);
   const Soft = softSkill(ui.Comm, ui.Eng);
   const BaseMix = (1-cfg.lambda)*SkillScore + cfg.lambda*Soft;
-  const Q = quizAdj(ui.QuizScore, cfg);
   const A = aimAdj(ui.AimScore, cfg);
   const ND = noDataAdj(NoData, ui.NoDataAdj, cfg);
-  const FinalRaw = BaseMix + Q + A + ND;
+  const FinalRaw = BaseMix + A + ND;
   const Final = clamp(FinalRaw, 0, 100);
-  return {NoData,R,Rcorr,sig,dR,SkillScore,Soft,BaseMix,Q,A,ND,FinalRaw,Final};
+  return {NoData,R,Rcorr,sig,dR,SkillScore,Soft,BaseMix,A,ND,FinalRaw,Final};
 }
 function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
 function std(arr){
@@ -633,16 +719,13 @@ function readCfg(){
     E0: parseNum(document.getElementById("set_E0").value, 2000),
     W: Math.max(1, parseNum(document.getElementById("set_W").value, 700)),
     BETA: parseNum(document.getElementById("set_BETA").value, 0.35),
+    ptsN: Math.max(0, Math.floor(parseNum(document.getElementById("set_ptsN").value, 5))),
     lambda: clamp(parseNum(document.getElementById("set_lambda").value, 0.15), 0, 0.5),
     gamma: clamp(parseNum(document.getElementById("set_gamma").value, 0.70), 0, 2),
     tgreen: Math.max(0, parseNum(document.getElementById("set_tgreen").value, 1.5)),
     tyellow: Math.max(0, parseNum(document.getElementById("set_tyellow").value, 3.0)),
     ND_MAX: Math.max(0, parseNum(document.getElementById("set_NDmax").value, 12)),
-    ND_ALLOW_NEG: document.getElementById("set_NDneg").value === "1",
-    Q_MAX: parseNum(document.getElementById("set_Qmax").value, 15),
-    Q0: parseNum(document.getElementById("set_Q0").value, 10),
-    Q_MIN: parseNum(document.getElementById("set_Qmin").value, 0),
-    Q_MAX_RAW: parseNum(document.getElementById("set_Qmaxraw").value, 20),
+        ND_ALLOW_NEG: document.getElementById("set_NDneg").value === "1",
     A_MAX: parseNum(document.getElementById("set_Amax").value, 10),
     A0: parseNum(document.getElementById("set_A0").value, 50),
     A_MIN: parseNum(document.getElementById("set_Amin").value, 0),
@@ -670,7 +753,41 @@ function involvedSynergyPlayers(teamIds){
   for(const e of DB.synergyEdges){ if(set.has(e.a) && set.has(e.b)){ bad.add(e.a); bad.add(e.b); } }
   return bad;
 }
+function ensurePlayerFields(p){
+  if(p.Comm==null) p.Comm = 0;
+  if(p.Eng==null) p.Eng = 0;
+  if(p.AimAdj==null) p.AimAdj = 0;
+  if(p.NoDataAdj==null) p.NoDataAdj = 0;
+  if(p.NoData==null) p.NoData = false;
+  // Elo default for NoData display/plots
+  if((p.Elo==null || !Number.isFinite(Number(p.Elo))) && p.NoData) p.Elo = 1150;
+}
+function playerUIFromDB(p){
+  return {
+    Comm: Number(p.Comm||0),
+    Eng: Number(p.Eng||0),
+    NoDataAdj: Number(p.NoDataAdj||0),
+    AimScore: Number(p.AimScore||CFG.A0||50), // if you later want raw aim score, else cfg.A0
+  };
+}
+function calcForTable(p){
+  ensurePlayerFields(p);
+  const ui = {Comm:Number(p.Comm||0), Eng:Number(p.Eng||0), NoDataAdj:Number(p.NoDataAdj||0), AimScore: CFG.A0}; // AimAdj stored directly (see below)
+  // We store AimAdj directly, so we'll bypass aimAdj() by setting AimScore=A0 and then adding p.AimAdj separately in Final.
+  const res = calcPlayer(p, {Comm:ui.Comm, Eng:ui.Eng, NoDataAdj:ui.NoDataAdj, AimScore: CFG.A0}, CFG);
+  // overwrite AimAdj with stored value (clamped later in calcPlayer? here we do safe)
+  res.A = Number.isFinite(Number(p.AimAdj)) ? Number(p.AimAdj) : 0;
+  const ND = noDataAdj(!!p.NoData, Number(p.NoDataAdj||0), CFG);
+  const FinalRaw = res.BaseMix + res.A + ND;
+  res.FinalRaw = FinalRaw;
+  res.Final = clamp(FinalRaw, 0, 100);
+  return res;
+}
 function renderDB(){
+  // sanitize players
+  DB.players.forEach(ensurePlayerFields);
+
+  // player picker
   const sel = document.getElementById("pickPlayer");
   sel.innerHTML = "";
   DB.players.forEach(p=>{
@@ -680,28 +797,43 @@ function renderDB(){
     sel.appendChild(opt);
   });
 
+  // table
+  const wrap = document.getElementById("dbTableWrap");
   const tbody = document.getElementById("dbTable");
+  if(!tbody) return;
   tbody.innerHTML = "";
+
   DB.players.forEach(p=>{
+    const res = calcForTable(p);
+    const Rbase = p.NoData ? CFG.R_NODATA : res.R;
     const tr=document.createElement("tr");
     tr.innerHTML = `
       <td class="mono">${p.id}</td>
       <td>${p.nick}</td>
-      <td>${p.NoData?1:0}</td>
-      <td class="mono">${p.NoData?"":p.Elo}</td>
-      <td class="mono">${p.NoData?"":round(p.KPR,2)}</td>
-      <td class="mono">${p.NoData?"":round(p.APR,2)}</td>
-      <td class="mono">${p.NoData?"":round(p.DPR,2)}</td>
-      <td class="mono">${p.NoData?"":round(p.ADR,0)}</td>
-      <td class="mono">${p.NoData?"":round(p.MKPR,2)}</td>
+      <td class="mono">${p.Elo ?? ""}</td>
+      <td class="mono col-detail">${p.NoData ? "" : round(p.KPR,3)}</td>
+      <td class="mono col-detail">${p.NoData ? "" : round(p.APR,3)}</td>
+      <td class="mono col-detail">${p.NoData ? "" : round(p.DPR,3)}</td>
+      <td class="mono col-detail">${p.NoData ? "" : round(p.ADR,1)}</td>
+      <td class="mono col-detail">${p.NoData ? "" : round(p.MKPR,3)}</td>
+      <td class="mono col-detail">${round(p.Comm,0)}</td>
+      <td class="mono col-detail">${round(p.Eng,0)}</td>
+      <td class="mono col-detail">${round(p.AimAdj,1)}</td>
+      <td class="mono col-detail">${round(p.NoDataAdj,1)}</td>
+      <td class="mono">${round(Rbase,4)}</td>
+      <td class="mono">${round(res.Rcorr,4)}</td>
+      <td class="mono">${round(res.SkillScore,2)}</td>
+      <td class="mono">${round(res.Final,2)}</td>
+      <td><button class="btn" data-del="${p.id}">Удалить</button></td>
     `;
     tbody.appendChild(tr);
   });
 
-  document.getElementById("edgesInfo").innerHTML = `
-    <div>Всего сыгранных пар: <span class="k">${DB.synergyEdges.length}</span></div>
-    <div class="small" style="margin-top:6px">Проверка стака: если внутри 5 игроков найдено ≥ 2 ребра — это «стак» (нужно заменить одного).</div>
-  `;
+  // show/hide details
+  const chk = document.getElementById("dbShowDetails");
+  if(chk && wrap){
+    wrap.classList.toggle("hideDetails", !chk.checked);
+  }
 }
 
 // Teams
@@ -719,9 +851,40 @@ function getUiInputs(){
     Comm:Number(document.getElementById("comm").value),
     Eng:Number(document.getElementById("eng").value),
     NoDataAdj:Number(document.getElementById("ndAdj").value),
-    QuizScore:Number(document.getElementById("quiz").value),
     AimScore:Number(document.getElementById("aim").value),
   };
+}
+
+
+function fillDbQuickFromCfg(){
+  const map = {db_E0:"E0", db_W:"W", db_BETA:"BETA", db_Rmin:"Rmin", db_Rmax:"Rmax"};
+  for(const id in map){
+    const el = document.getElementById(id);
+    if(el && CFG) el.value = CFG[map[id]];
+  }
+}
+function applyDbQuickToCfg(){
+  // write into settings inputs too (single source of truth)
+  const pairs = [
+    ["db_E0","set_E0"],["db_W","set_W"],["db_BETA","set_BETA"],["db_Rmin","set_Rmin"],["db_Rmax","set_Rmax"]
+  ];
+  for(const [src,dst] of pairs){
+    const a=document.getElementById(src), b=document.getElementById(dst);
+    if(a && b) b.value = a.value;
+  }
+  applyCfg();
+  const msg=document.getElementById("dbCfgMsg");
+  if(msg) msg.textContent="Применено.";
+}
+function refreshAllDbDependentUI(){
+  // Re-render everything that depends on DB (table, dropdowns, charts)
+  renderDB();
+  renderTeams();
+  // Charts depend on CFG and DB
+  if(CFG){
+    drawOnePagerCharts(CFG);
+    drawDbMiniChart(CFG);
+  }
 }
 function renderTeams(){
   const a=document.getElementById("teamA"), b=document.getElementById("teamB");
@@ -774,12 +937,17 @@ function calcAndShowPlayer(){
   const ui=getUiInputs();
   const res=calcPlayer(p, ui, CFG);
 
+  // Persist subjective fields back into DB
+  p.Comm = ui.Comm;
+  p.Eng = ui.Eng;
+  p.AimAdj = res.A;
+  p.NoDataAdj = ui.NoDataAdj;
+
   document.getElementById("playerOut").innerHTML = `
     ${outBox("FinalPlayer", round(res.Final,1), "Итог 0..100", "final")}
     ${outBox("SkillScore", round(res.SkillScore,1), "Из Rcorr → 0..100")}
     ${outBox("SoftSkill", round(res.Soft,1), "Comm/Eng")}
-    ${outBox("QuizAdj", round(res.Q,1), "±Q_MAX")}
-    ${outBox("AimAdj", round(res.A,1), "±A_MAX")}
+        ${outBox("AimAdj", round(res.A,1), "±A_MAX")}
     ${outBox("NoDataAdj", round(res.ND,1), "Только NoData")}
   `;
   document.getElementById("devOut").innerHTML = `
@@ -787,9 +955,14 @@ function calcAndShowPlayer(){
     <div class="mono">R=${round(res.R,4)}; sig=${res.sig===null?"":round(res.sig,4)}; dR=${round(res.dR,4)}; Rcorr=${round(res.Rcorr,4)}</div>
     <div class="mono">SkillScore=100*clamp((Rcorr-Rmin)/(Rmax-Rmin),0..1)=${round(res.SkillScore,2)}</div>
     <div class="mono">BaseMix=(1-λ)*SkillScore + λ*SoftSkill=${round(res.BaseMix,2)}</div>
-    <div class="mono">FinalRaw=BaseMix+QuizAdj+AimAdj+ND=${round(res.FinalRaw,2)}; Final=${round(res.Final,2)}</div>
+    <div class="mono">FinalRaw=BaseMix+AimAdj+ND=${round(res.FinalRaw,2)}; Final=${round(res.Final,2)}</div>
   `;
   document.getElementById("calcMsg").textContent = p.NoData ? "NoData=1: R=R_NODATA, Elo-коррекция не применяется." : "Faceit: R по стате + Elo-коррекция.";
+
+  // Update DB-dependent UI (table + points)
+  renderDB();
+  if(CFG) drawOnePagerCharts(CFG);
+
   return {p,ui,res};
 }
 function writeToSlot(){
@@ -807,23 +980,7 @@ function calcTeam(which){
   root.querySelectorAll("select").forEach(s=>s.classList.remove("badline","warnline"));
 
   const ids=team[which].slice();
-  const edges=countSynergyEdges(ids);
-
-  if(edges>=2){
-    const bad=involvedSynergyPlayers(ids);
-    root.querySelectorAll("select").forEach(s=>{
-      if(s.value && bad.has(s.value)) s.classList.add("badline");
-    });
-    out.innerHTML = `<div class="outbox badline"><div class="hint"><b>Ошибка</b></div>
-      <div class="small">Внутри команды найдено <span class="k">${edges}</span> сыгранных связей (ребер). Это означает &gt;2 сыгранных игроков. Нужно заменить одного.</div></div>`;
-    return null;
-  }
-  if(edges===1){
-    const bad=involvedSynergyPlayers(ids);
-    root.querySelectorAll("select").forEach(s=>{
-      if(s.value && bad.has(s.value)) s.classList.add("warnline");
-    });
-  }
+    const edges = 0;
 
   const finals = which==="A" ? team.finalsA : team.finalsB;
   const res = teamScore(finals, CFG);
@@ -832,7 +989,7 @@ function calcTeam(which){
       ${outBox("TeamScore", round(res.score,1), "Mean − γ·Std", "final")}
       ${outBox("Mean", round(res.mean,1), "Средняя сила")}
       ${outBox("Std", round(res.std,1), "Перекос")}
-      ${outBox("Synergy edges", edges, edges===1?"Одна сыгранная пара (OK)":"Нет сыгранных")}
+      
     </div>`;
   return res;
 }
@@ -1003,6 +1160,16 @@ function drawLineChart(canvas, lines, opts){
   }
 }
 
+function drawDbMiniChart(cfg){
+  const c = document.getElementById('ch_db_rcorrmini');
+  if(!c) return;
+  const ELO_MIN=800,ELO_MAX=5000,step=50;
+  const baseRs=[1.0,1.2,1.4];
+  const colors=["rgba(103,212,255,.9)","rgba(124,255,157,.9)","rgba(255,204,102,.9)"];
+  const lines=baseRs.map((R,idx)=>{ const arr=[]; for(let e=ELO_MIN;e<=ELO_MAX;e+=step){ const sig=sigmoid((e-cfg.E0)/cfg.W); const dR=cfg.BETA*(2*sig-1); arr.push({x:e,y:R+dR}); } return {data:arr,label:`R=${R.toFixed(1)}`,color:colors[idx]}; });
+  drawLineChart(c, lines, {xmin:ELO_MIN,xmax:ELO_MAX,ymin:0,ymax:2.2,xlabel:"Elo",ylabel:"Rcorr",markX:cfg.E0});
+}
+
 function drawOnePagerCharts(cfg){
   // If one-pager is not visible yet, retry shortly
   const probe = document.getElementById("ch_sig");
@@ -1049,25 +1216,23 @@ function drawOnePagerCharts(cfg){
       }
       return {data:arr, label:`R=${R.toFixed(1)}`, color:colors[idx]};
     });
+
     const samples = [];
     if(window.DB && Array.isArray(window.DB.players)){
-      const pick = window.DB.players.slice(-5);
+      const pick = window.DB.players.slice(0, cfg.ptsN || 5);
       for(const pl of pick){
-        if(pl && pl.NoData) continue;
-        if(pl && Number.isFinite(pl.Elo) && pl.KPR!=null){
-          const Rb = calcRatingFromStats(pl); // uses existing function
-          const sigp = sigmoid((pl.Elo - cfg.E0)/cfg.W);
-          const dRp = cfg.BETA * (2*sigp - 1);
-          const rc = Rb + dRp;
-          samples.push({x: pl.Elo, y: rc, label: pl.nick || pl.id});
-        }
+        if(!pl) continue;
+        const elo = Number.isFinite(pl.Elo) ? pl.Elo : 1150;
+        let Rb;
+        if(pl.NoData){ Rb = cfg.R_NODATA; }
+        else { Rb = calcRatingFromStats(pl); }
+        const sigp = sigmoid((elo - cfg.E0)/cfg.W);
+        const dRp = cfg.BETA * (2*sigp - 1);
+        const rc = pl.NoData ? Rb : (Rb + dRp);
+        samples.push({x: elo, y: rc, label: (pl.nick||pl.id||"").slice(0,10)});
       }
     }
-    // scatter series (drawn as points)
-    if(samples.length){
-      lines.push({data: samples, color:"rgba(255,255,255,.85)", label:"samples", pointOnly:true});
-    }
-
+    if(samples.length){ lines.push({data:samples, color:"rgba(255,255,255,.85)", pointOnly:true}); }
     drawLineChart(c3, lines, { xmin:ELO_MIN, xmax:ELO_MAX, ymin:0, ymax:2.2, xlabel:"Elo", ylabel:"Rcorr", markX:cfg.E0 });
   }
 }
@@ -1075,11 +1240,11 @@ function applyCfg(){
   CFG = readCfg(); window.CFG = CFG;
   exportCfgJson();
   document.getElementById("cfgMsg").textContent = "Настройки применены.";
+  fillDbQuickFromCfg();
   drawOnePagerCharts(CFG);
+  drawDbMiniChart(CFG);
 }
 document.getElementById("btnApplyCfg").onclick=()=>applyCfg();
-document.getElementById("btnExportCfg").onclick=()=>exportCfgJson();
-document.getElementById("btnRegenDB").onclick=()=>{ regenDB(5); renderDB(); renderTeams(); };
 // DB export/import
 function exportDB(){
   const payload = JSON.stringify(DB, null, 2);
@@ -1100,7 +1265,8 @@ function applyImportedDB(obj){
     throw new Error("Неверный формат: ожидаем {players:[], synergyEdges:[]}");
   }
   DB.players = obj.players;
-  DB.synergyEdges = obj.synergyEdges;
+  DB.synergyEdges = obj.synergyEdges || [];
+  DB.players.forEach(ensurePlayerFields);
   window.DB = DB;
 }
 function clearDB(){
@@ -1114,6 +1280,24 @@ function clearDB(){
 }
 document.getElementById("btnExportDB").onclick = ()=>exportDB();
 document.getElementById("btnClearDB").onclick = ()=>clearDB();
+document.getElementById("btnExportCfg").onclick = ()=>{
+  const cfg = readCfg();
+  const payload = JSON.stringify(cfg, null, 2);
+  const blob = new Blob([payload], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href=url; a.download="cs_streamer_rating_cfg.json";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+};
+document.getElementById("fileImportCfg").addEventListener("change", async (ev)=>{
+  const f = ev.target.files && ev.target.files[0]; if(!f) return;
+  try{ const obj = JSON.parse(await f.text());
+    // apply known keys
+    const map = {E0:"set_E0", W:"set_W", BETA:"set_BETA", Rmin:"set_Rmin", Rmax:"set_Rmax", lambda:"set_lambda", R_NODATA:"set_Rnodata", ptsN:"set_ptsN"};
+    for(const k in map){ if(obj[k]!=null){ const el=document.getElementById(map[k]); if(el) el.value=obj[k]; } }
+    applyCfg();
+  }catch(e){ console.log(e); }
+  finally{ ev.target.value=""; }
+});
 document.getElementById("fileImportDB").addEventListener("change", async (ev)=>{
   const f = ev.target.files && ev.target.files[0];
   if(!f) return;
@@ -1121,8 +1305,7 @@ document.getElementById("fileImportDB").addEventListener("change", async (ev)=>{
     const txt = await f.text();
     const obj = JSON.parse(txt);
     applyImportedDB(obj);
-    renderDB();
-    renderTeams();
+    refreshAllDbDependentUI();
     const msg = document.getElementById("dbIoMsg");
     if(msg) msg.textContent = `БД загружена: игроков ${DB.players.length}, связей ${DB.synergyEdges.length}.`;
   }catch(err){
@@ -1180,9 +1363,8 @@ function addManualPlayer(){
 
   DB.players.push(player);
 
-  // Re-render lists/table/teams
-  renderDB();
-  renderTeams();
+  // Re-render all DB-dependent UI
+  refreshAllDbDependentUI();
 
   // Select newly added player in picker
   const pick = document.getElementById("pickPlayer");
@@ -1191,6 +1373,15 @@ function addManualPlayer(){
   document.getElementById("addPlayerMsg").textContent =
     `Добавлен игрок ${nick} (${id})` + (nodata ? " — NoData" : ` — Elo ${player.Elo}`);
 }
+document.getElementById("btnRandStats").onclick = ()=>{
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  document.getElementById("add_elo").value = Math.round(rnd(800,5000));
+  document.getElementById("add_kpr").value = (rnd(0.45,1.35)).toFixed(3);
+  document.getElementById("add_apr").value = (rnd(0.05,0.35)).toFixed(3);
+  document.getElementById("add_dpr").value = (rnd(0.55,0.95)).toFixed(3);
+  document.getElementById("add_adr").value = (rnd(55,125)).toFixed(2);
+  document.getElementById("add_mkpr").value = (rnd(0.05,0.65)).toFixed(3);
+};
 document.getElementById("btnAddPlayer").onclick = ()=>addManualPlayer();
 
 // UX: disable stat inputs when NoData=Да
@@ -1209,6 +1400,7 @@ syncAddForm();
 document.getElementById("btnCalc").onclick=()=>calcAndShowPlayer();
 document.getElementById("btnWrite").onclick=()=>writeToSlot();
 document.getElementById("btnRand").onclick=()=>{
+  if(!DB.players.length){ document.getElementById("calcMsg").textContent="БД пустая — добавьте игрока или импортируйте JSON."; return; }
   const sel=document.getElementById("pickPlayer");
   sel.value = DB.players[rint(0,DB.players.length-1)].id;
   calcAndShowPlayer();
@@ -1220,12 +1412,58 @@ document.getElementById("btnFillRandom").onclick=()=>fillRandomTeams();
 document.getElementById("btnResetTeams").onclick=()=>resetTeams();
 
 // Init
-regenDB(5);
 applyCfg();
+
+// Start with empty DB by default (import your JSON when needed)
+DB.players = DB.players || [];
+DB.synergyEdges = DB.synergyEdges || [];
+window.DB = DB;
+
+// Wire DB quick apply
+const btnApplyFromDB = document.getElementById("btnApplyCfgFromDB");
+if(btnApplyFromDB) btnApplyFromDB.onclick = ()=>applyDbQuickToCfg();
+
+// DB details toggle
+const chkDetails = document.getElementById("dbShowDetails");
+if(chkDetails){
+  chkDetails.onchange = ()=>renderDB();
+}
+
+// Delete row (event delegation)
+const dbWrap = document.getElementById("dbTableWrap");
+if(dbWrap){
+  dbWrap.addEventListener("click", (ev)=>{
+    const t = ev.target;
+    if(t && t.dataset && t.dataset.del){
+      const id = t.dataset.del;
+      DB.players = DB.players.filter(p=>p.id!==id);
+      window.DB = DB;
+      refreshAllDbDependentUI();
+    }
+  });
+}
+
+// Player picker -> load stored subjective fields into UI
+const pick = document.getElementById("pickPlayer");
+if(pick){
+  pick.addEventListener("change", ()=>{
+    const p = playerById(pick.value);
+    if(!p) return;
+    ensurePlayerFields(p);
+    document.getElementById("comm").value = p.Comm;
+    document.getElementById("eng").value = p.Eng;
+    document.getElementById("ndAdj").value = p.NoDataAdj;
+    document.getElementById("commVal").textContent = String(p.Comm);
+    document.getElementById("engVal").textContent = String(p.Eng);
+  });
+}
+
 renderDB();
 renderTeams();
 hookSliders();
-window.addEventListener('resize', ()=>{ if(CFG) drawOnePagerCharts(CFG); });
+
+// Make sure charts redraw when switching tabs / resizing
+window.addEventListener('resize', ()=>{ if(CFG) { drawOnePagerCharts(CFG); drawDbMiniChart(CFG);} });
 </script>
 </body>
 </html>
