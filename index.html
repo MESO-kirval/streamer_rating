@@ -90,227 +90,249 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 </header>
 
 <main>
+
 <section class="panel active" id="panel-doc" role="tabpanel" aria-labelledby="tab-doc">
   <div class="card">
     <h2>One-pager: математика игрока</h2>
     <div class="small">
-      <div class="k">R = 0.68448 + 0.65598·KPR + 0.31305·APR − 0.75999·DPR + 0.003707·ADR + 0.72169·MKPR;  R=max(R,0)</div>
+      <div class="k">R_raw = 0.68448 + 0.65598·KPR + 0.31305·APR − 0.75999·DPR + 0.003707·ADR + 0.72169·MKPR; R_raw=max(R_raw,0)</div>
       <div class="hr"></div>
-      <div class="k">sig = 1/(1+exp(-(Elo−E0)/W)); dR = BETA·(2·sig−1); Rcorr = (NoData? R : R+dR)</div>
+      <div class="k">w(n)=n/(n+k_shrink); R_used=w(n)·R_raw + (1−w(n))·R_pool</div>
+      <div class="hr"></div>
+      <div class="k">sig = 1/(1+exp(-(Elo−E0)/W)); dR = BETA·(2·sig−1)</div>
+      <div class="hr"></div>
+      <div class="k">Faceit: Rcorr = R_used + dR; NoData: Rcorr = R_NODATA + dR(Elo or fallback 1150)</div>
       <div class="hr"></div>
       <div class="k">SkillScore = 100·clamp((Rcorr−Rmin)/(Rmax−Rmin),0..1)</div>
       <div class="hr"></div>
-      <div class="k">SoftSkill = 100·((Comm/10 + Eng/10)/2)</div>
+      <div class="k">SoftSkill = 100·((Comm/10 + Eng/10)/2); BaseMix = (1−λ)·SkillScore + λ·SoftSkill</div>
       <div class="hr"></div>
-      <div class="k">BaseMix = (1−λ)·SkillScore + λ·SoftSkill</div>
-      <div class="hr"></div>
-      <div class="k">FinalPlayer = clamp(BaseMix + AimAdj + ND, 0..100)</div>
-    </div>
-  </div>
-  <div class="hr"></div>
-
-  <div class="card">
-    <h2>Математика игрока — объяснение простыми словами</h2>
-    <div class="small">
-      <p style="margin:0 0 10px"><b>Цель:</b> получить одно число силы игрока (0..100), которое учитывает: (1) личную статистику, (2) сложность среды (Elo), (3) опциональные субъективные слои.</p>
-
-      <div class="hr"></div>
-
-      <p style="margin:0 0 8px"><b>1) Что вводим / что тянем из БД</b></p>
-      <ul style="margin:0 0 10px 18px;padding:0">
-        <li><span class="k">Elo</span> (Faceit).</li>
-        <li>5 агрегатов: <span class="k">KPR</span>, <span class="k">APR</span>, <span class="k">DPR</span>, <span class="k">ADR</span>, <span class="k">MKPR</span>.</li>
-        <li><span class="k">NoData</span>: если данных Faceit нет — ставим <span class="k">R=R_NODATA</span> и Elo-коррекцию не применяем.</li>
-      </ul>
-
-      <p style="margin:0 0 8px"><b>2) Базовый рейтинг R (примерно 0..2)</b></p>
-      <p style="margin:0 0 10px">Это сумма вкладов метрик с коэффициентами + базовая константа. Затем <span class="k">R=max(R,0)</span>, чтобы не уходить в минус.</p>
-
-      <p style="margin:0 0 8px"><b>3) Коррекция сложности среды по Elo → Rcorr</b></p>
-      <p style="margin:0 0 10px">
-        Одинаковый R легче получить в слабой среде и сложнее — в сильной. Поэтому считаем <span class="k">sig(Elo)</span> и далее
-        <span class="k">dR=BETA·(2·sig−1)</span>, итог <span class="k">Rcorr=R+dR</span>.
-      </p>
-
-      <p style="margin:0 0 8px"><b>4) Нормализация Rcorr → SkillScore (0..100)</b></p>
-      <p style="margin:0 0 10px">
-        Линейно переводим <span class="k">[Rmin..Rmax]</span> в <span class="k">[0..100]</span> с клиппингом:
-        <span class="k">SkillScore=100·clamp((Rcorr−Rmin)/(Rmax−Rmin),0..1)</span>.
-      </p>
-
-      <p style="margin:0 0 8px"><b>5) Субъективные слои (опционально)</b></p>
-      <p style="margin:0 0 10px">
-        Далее можно добавить: <span class="k">SoftSkill</span>, <span class="k">AimAdj</span>, <span class="k">NoDataAdj</span>.
-        Итог: <span class="k">FinalPlayer=clamp(BaseMix+AimAdj+ND,0..100)</span>.
-      </p>
-
-      
-<div class="hr"></div>
-      <p style="margin:0 0 8px"><b>Что означают SoftSkill / AimAdj / NoDataAdj</b></p>
-      <ul style="margin:0 0 10px 18px;padding:0">
-        <li><span class="k">SoftSkill</span> — субъективная оценка коммуникации и вовлечённости: <span class="k">SoftSkill = 100·((Comm/10 + Eng/10)/2)</span>. Влияет на итог через <span class="k">λ</span>.</li>
-        <li><span class="k">AimAdj</span> — добавка/штраф по Aim-тесту: линейно вокруг <span class="k">A0</span>, максимум по модулю <span class="k">A_MAX</span>. Обычно применяется для NoData.</li>
-        <li><span class="k">NoDataAdj</span> — ручная поправка только для NoData (±), ограничена <span class="k">ND_MIN/ND_MAX</span>.</li>
-      </ul>
-<details>
-        <summary>Как калибровать</summary>
-        <div class="small" style="margin-top:8px">
-          • Среда влияет слишком слабо → ↑ <span class="k">BETA</span>.<br/>
-          • Сместить центр влияния → <span class="k">E0</span>.<br/>
-          • Сделать переход шире/уже → <span class="k">W</span>.<br/>
-          • Клиппинг 0/100 → подберите <span class="k">Rmin/Rmax</span>.
-        </div>
-      </details>
+      <div class="k">FinalPlayer = clamp(BaseMix + AimAdj + NoDataAdj, 0..100)</div>
     </div>
   </div>
 
   <div class="hr"></div>
 
   <div class="card">
-    <h2>Зачем Elo-коррекция и как она работает</h2>
+    <h2>Блок 1. Математика игрока</h2>
     <div class="small">
-      <p style="margin:0 0 10px">
-        Проблема: одинаковые hard-метрики (KPR/APR/DPR/ADR/MKPR) и одинаковый <span class="k">R</span> могут быть получены в разной среде.
-        На низком Elo статистику «набить проще», на высоком — «дороже». Поэтому мы добавляем корректировку сложности среды.
-      </p>
+      <p style="margin:0 0 10px"><b>Цель модели:</b> получить одно число силы игрока <span class="k">FinalPlayer</span> в диапазоне 0..100, не смешивая подтверждённую силу по данным, субъективные soft-параметры и риски команды.</p>
 
       <div class="hr"></div>
 
-      <p style="margin:0 0 10px"><b>Шаги по игроку (коротко):</b></p>
-      <ol style="margin:0 0 10px 18px; padding:0">
-        <li>Считаем <span class="k">R</span> по формуле (HLTV-like).</li>
-        <li>Считаем <span class="k">sig(Elo)</span> — S-образную кривую (сигмоиду), которая почти плоская на краях и наиболее чувствительна в середине.</li>
-        <li>Считаем поправку <span class="k">dR</span> и получаем <span class="k">Rcorr = R + dR</span>.</li>
-        <li>Переводим <span class="k">Rcorr</span> в шкалу 0–100 → <span class="k">SkillScore</span>.</li>
-        <li>Дальше добавляем субъективные слои (soft/aim/NoDataAdj) — они остаются выключаемыми/калибруемыми отдельно.</li>
+      <p style="margin:0 0 8px"><b>1) Что такое R_raw</b></p>
+      <p style="margin:0 0 10px">Это базовый raw-рейтинг по статистике Faceit/HLTV-like формуле: KPR, APR, DPR, ADR, MKPR. Он отражает только личные игровые агрегаты и не знает ничего про размер выборки и сложность среды.</p>
+
+      <p style="margin:0 0 8px"><b>2) Что такое shrinkage и зачем он нужен</b></p>
+      <p style="margin:0 0 10px">Если у игрока мало матчей, его raw-стата шумнее. Поэтому <span class="k">R_raw</span> частично стягивается к пуловому среднему <span class="k">R_pool</span>. Вес данных игрока задаётся как <span class="k">w(n)=n/(n+k_shrink)</span>. При маленьком <span class="k">MatchesCount</span> вес мал, при большом — стремится к 1.</p>
+
+      <p style="margin:0 0 8px"><b>3) Что делают R_pool и k_shrink</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">R_pool</span> — “базовый средний raw-рейтинг”, к которому стягиваются игроки с маленькой выборкой.</li>
+        <li><span class="k">k_shrink</span> — скорость, с которой shrinkage ослабевает. Чем он выше, тем дольше игрок остаётся ближе к <span class="k">R_pool</span>.</li>
+      </ul>
+
+      <p style="margin:0 0 8px"><b>4) Как считается Elo-коррекция</b></p>
+      <p style="margin:0 0 10px">После того как получен базовый рейтинг для игрока, модель добавляет поправку сложности среды: <span class="k">dR = BETA·(2·sig−1)</span>, где <span class="k">sig = 1/(1+exp(-(Elo−E0)/W))</span>. На слабом Elo поправка отрицательная, на сильном — положительная.</p>
+
+      <p style="margin:0 0 8px"><b>5) Как ведёт себя обычный Faceit-игрок</b></p>
+      <ol style="margin:0 0 10px 18px;padding:0">
+        <li>Считается <span class="k">R_raw</span>.</li>
+        <li>Считается shrinkage → <span class="k">R_used</span>.</li>
+        <li>Применяется Elo-коррекция → <span class="k">Rcorr = R_used + dR</span>.</li>
+        <li>Из <span class="k">Rcorr</span> получается <span class="k">SkillScore</span> в шкале 0..100.</li>
       </ol>
 
-      <div class="hr"></div>
+      <p style="margin:0 0 8px"><b>6) Как ведёт себя NoData-игрок</b></p>
+      <p style="margin:0 0 10px">Для NoData не считается shrinkage по матчам. Вместо этого используется <span class="k">R_NODATA</span> как базовый prior, а потом применяется Elo-коррекция. Если реального Elo нет, используется fallback <span class="k">1150</span>. Итог: <span class="k">Rcorr = R_NODATA + dR</span>.</p>
 
-      <p style="margin:0 0 10px"><b>Ключевые настройки (берутся из вкладки «Настройки»):</b></p>
-      <ul style="margin:0 0 10px 18px; padding:0">
-        <li><span class="k">E0</span> — центр сигмоиды (где влияние Elo максимально). Обычно около границы сильной среды.</li>
-        <li><span class="k">W</span> — ширина перехода (чем больше, тем «плавнее» и шире зона влияния).</li>
-        <li><span class="k">BETA</span> — амплитуда (максимальная добавка/штраф к R). На краях dR стремится к ±BETA.</li>
+      <p style="margin:0 0 8px"><b>7) Как считается SkillScore</b></p>
+      <p style="margin:0 0 10px">Рейтинг <span class="k">Rcorr</span> переводится в шкалу 0..100 через <span class="k">Rmin/Rmax</span>. Это чистый численный слой силы без субъективных поправок.</p>
+
+      <p style="margin:0 0 8px"><b>8) Как soft-skill смешивается через λ</b></p>
+      <p style="margin:0 0 10px">Soft-skill не прибавляется “сверху”, а смешивается со SkillScore через взвешенное среднее: <span class="k">BaseMix = (1−λ)·SkillScore + λ·SoftSkill</span>. Поэтому его влияние ограничено и сильнее меняет средних игроков, чем уже сильных топов.</p>
+
+      <p style="margin:0 0 8px"><b>9) Как работают AimAdj и NoDataAdj</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">AimAdj</span> — добавка/штраф по Aim-тесту вокруг <span class="k">A0</span>. Используется только для NoData.</li>
+        <li><span class="k">NoDataAdj</span> — ручная поправка только для NoData в коридоре <span class="k">[ND_MIN..ND_MAX]</span>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="card">
+    <h2>Блок 2. Математика команды</h2>
+    <div class="small">
+      <p style="margin:0 0 10px"><span class="k">TeamPower = mean(FinalPlayer)</span>. Это только средняя сила команды по игрокам. В неё не входят риск, сыгранность, разброс, неопределённость и штрафы.</p>
+      <p style="margin:0 0 10px"><span class="k">TeamRisk = сумма risk points</span>. Это отдельный слой неопределённости и структурного риска, который не подменяет силу команды.</p>
+      <p style="margin:0 0 10px"><b>Команда валидна, если одновременно:</b></p>
+      <ol style="margin:0 0 10px 18px;padding:0">
+        <li>нет жёстких invalid rules по сыгранности,</li>
+        <li><span class="k">TeamPower ∈ [TeamPowerMin..TeamPowerMax]</span>,</li>
+        <li><span class="k">TeamRisk ≤ RiskCap</span>.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="card">
+    <h2>Блок 3. Risk model</h2>
+    <div class="small">
+      <p style="margin:0 0 8px"><b>Risk points:</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li>NoData-игроки;</li>
+        <li>маленькая выборка матчей (<span class="k">MatchesCount</span>);</li>
+        <li>сильные ручные корректировки;</li>
+        <li>одна сыгранная пара;</li>
+        <li>большой внутренний разрыв по игрокам (<span class="k">gap = max-min</span>);</li>
+        <li>top-heavy структура через <span class="k">Top2Share</span>;</li>
+        <li>две star-единицы в одной команде.</li>
       </ul>
 
-      <p style="margin:0 0 10px">
-        Интуиция формы: на низком Elo и на очень высоком Elo кривая насыщается (влияние растёт медленно),
-        а в средней зоне (вокруг <span class="k">E0</span>) влияние меняется быстрее всего.
-      </p>
+      <p style="margin:0 0 8px"><b>Invalid rules:</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">2+ played pairs</span> → invalid;</li>
+        <li><span class="k">3 linked players via pairs</span> → invalid.</li>
+      </ul>
 
-      <details>
-        <summary>Почему это удобно для баланса</summary>
-        <div class="small" style="margin-top:8px">
-          <ul style="margin:0 0 0 18px; padding:0">
-            <li>Одинаковый <span class="k">R</span> в сильной среде становится «дороже» → игрок на высоком Elo не недооценивается.</li>
-            <li>Одинаковый <span class="k">R</span> в слабой среде становится «дешевле» → новичок/смурф не переоценивается только за счёт слабых оппонентов.</li>
-            <li>Параметры <span class="k">E0/W/BETA</span> крутятся без изменения формул, и графики ниже сразу показывают эффект.</li>
-          </ul>
-        </div>
-      </details>
+      <p style="margin:0 0 10px"><b>Разница между силой и риском:</b> TeamPower отвечает на вопрос “насколько команда сильна по составу”, TeamRisk — “насколько состав нестабилен/опасен для баланса”. Эти числа не смешиваются в одно.</p>
+    </div>
+  </div>
 
-      <div class="hr"></div>
+  <div class="hr"></div>
 
+  <div class="card">
+    <h2>Блок 4. Калибровка модели</h2>
+    <div class="small">
+      <p style="margin:0 0 10px"><b>Калибровка игрока</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">Rmin / Rmax</span> — диапазон перевода Rcorr в 0..100. ↑Rmax / ↓Rmin сжимает шкалу, ↓Rmax / ↑Rmin делает её резче.</li>
+        <li><span class="k">R_pool</span> — базовый центр shrinkage. Если увеличить, low-sample игроки в среднем поднимутся.</li>
+        <li><span class="k">k_shrink</span> — сила shrinkage. ↑ делает low-sample игроков ближе к R_pool, ↓ быстрее отпускает к их R_raw.</li>
+        <li><span class="k">E0</span> — центр самой чувствительной зоны Elo-коррекции. ↑ смещает “основную битву среды” вправо.</li>
+        <li><span class="k">W</span> — ширина перехода Elo-коррекции. ↑ делает переход более плавным, ↓ делает его резче.</li>
+        <li><span class="k">BETA</span> — амплитуда Elo-коррекции. ↑ усиливает наказание слабой среды и награду сильной.</li>
+        <li><span class="k">λ</span> — сила смешивания SoftSkill. ↑ усиливает soft-слой, ↓ делает итог ближе к чистому SkillScore.</li>
+        <li><span class="k">A0 / A_MAX_RAW / A_MAX</span> — центр Aim-теста, его raw-диапазон и максимум бонуса/штрафа.</li>
+        <li><span class="k">ND_MIN / ND_MAX</span> — ручной коридор для NoDataAdj.</li>
+        <li><span class="k">R_NODATA</span> — базовый raw prior для NoData до Elo-коррекции.</li>
+      </ul>
+
+      <p style="margin:0 0 10px"><b>Калибровка команды</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">TeamPowerMin / TeamPowerMax</span> — абсолютный коридор допустимой силы команды. Сужение коридора делает правила строже.</li>
+        <li><span class="k">RiskCap</span> — верхний предел суммарного риска. ↓ делает модель осторожнее, ↑ позволяет больше нестабильных составов.</li>
+      </ul>
+
+      <p style="margin:0 0 10px"><b>Калибровка risk model</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">lowSample_1 / lowSample_2</span> — пороги для low-sample риска. ↑ расширяет зону игроков, которых считаем низкой выборкой.</li>
+        <li><span class="k">manualAdj_T1 / manualAdj_T2</span> — пороги крупных ручных корректировок.</li>
+        <li><span class="k">gap_T1 / gap_T2</span> — пороги внутреннего разрыва по силе в команде.</li>
+        <li><span class="k">Top2Share_T1 / Top2Share_T2</span> — насколько top-heavy может быть состав.</li>
+        <li><span class="k">star_threshold</span> — с какого FinalPlayer игрок считается star-player.</li>
+        <li><span class="k">risk_pair</span> — вес одной сыгранной пары в risk, если состав ещё не invalid.</li>
+        <li><span class="k">riskTwoStars</span> — риск за 2 star-player в одной команде.</li>
+        <li><span class="k">riskNoData / riskSecondNoData / riskLowSample1 / riskLowSample2 / riskManual1 / riskManual2 / riskGap1 / riskGap2 / riskTop2_1 / riskTop2_2</span> — сами risk-веса. Их рост делает соответствующий фактор жёстче.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="card">
+    <h2>Графики Elo-коррекции</h2>
+    <div class="small">
+      <p style="margin:0 0 10px">Эти графики нужны для быстрой верификации формы сигмоиды и того, как один и тот же raw-рейтинг “сдвигается” по разным Elo.</p>
       <div class="grid2">
         <div class="card">
           <h3>График 1 — sig(Elo)</h3>
-          <div class="small">S-образная кривая (0..1). Круче всего в районе E0, на краях насыщается.</div>
+          <div class="small">S-образная кривая 0..1. Самая чувствительная зона вокруг E0.</div>
           <canvas id="ch_sig" class="chartCanvas"></canvas>
         </div>
         <div class="card">
           <h3>График 2 — dR(Elo)</h3>
-          <div class="small">Поправка к R: <span class="k">dR = BETA·(2·sig−1)</span>. На краях ≈ ±BETA.</div>
+          <div class="small">Поправка к рейтингу среды. На краях стремится к ±BETA.</div>
           <canvas id="ch_dr" class="chartCanvas"></canvas>
         </div>
       </div>
-
       <div class="card" style="margin-top:12px">
         <h3>График 3 — примеры Rcorr для фиксированных R</h3>
-        <div class="small">Показывает, как один и тот же R «сдвигается» по Elo. Это то, что вы руками проверяете в сценариях.</div>
+        <div class="small">Показывает, как одинаковые raw-значения ведут себя в разных средах. Точки берутся из БД.</div>
         <canvas id="ch_rcorr" class="chartCanvasWide"></canvas>
         <div class="small" style="margin-top:8px">Линии: R=1.0, 1.2, 1.4.</div>
       </div>
     </div>
   </div>
-
-<div class="hr"></div>
-
-  <div class="card">
-    <h2>Команда и «сыгранность»</h2>
-    <div class="small">
-      <div class="k">Mean = avg(FinalPlayer1..5); Std = sqrt( Σ(xi−Mean)^2 / 5 ); TeamScore = Mean − γ·Std</div>
-      <div class="hr"></div>
-      <div><b>Примечание:</b> командная часть сейчас вспомогательная для понимания баланса. Проверки сыгранности временно не используем.</div>
-    </div>
-  </div>
 </section>
 
 <section class="panel" id="panel-calc" role="tabpanel" aria-labelledby="tab-calc">
-  <div class="grid2">
-    <div class="card">
-      <h2>Выбор игрока → запись в слот</h2>
-
-      <div class="inline3">
-        <div class="field"><label>Команда</label>
-          <select id="pickTeam"><option value="A">Команда A</option><option value="B">Команда B</option></select>
-        </div>
-        <div class="field"><label>Слот</label>
-          <select id="pickSlot"><option value="1">Слот 1</option><option value="2" selected>Слот 2</option><option value="3">Слот 3</option><option value="4">Слот 4</option><option value="5">Слот 5</option></select>
-        </div>
-        <div class="field"><label>Игрок (из БД)</label><select id="pickPlayer"></select></div>
+  <div class="card">
+    <h2>Калькулятор игрока</h2>
+    <div class="inline3">
+      <div class="field"><label>Команда</label>
+        <select id="pickTeam"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option></select>
       </div>
-
-      <div class="inline3">
-        <div class="field">
-          <label>Comm (0–10)</label>
-          <input id="comm" type="range" min="0" max="10" step="1" value="5"/>
-          <div class="small">Текущее: <span class="k" id="commVal">5</span></div>
-        </div>
-        <div class="field">
-          <label>Eng (0–10)</label>
-          <input id="eng" type="range" min="0" max="10" step="1" value="5"/>
-          <div class="small">Текущее: <span class="k" id="engVal">5</span></div>
-        </div>
-        <div class="field" id="calcNoDataBox">
-          <label>NoData manual (±)</label>
-          <input id="ndAdj" type="range" min="-12" max="12" step="1" value="0"/>
-          <div class="small">Текущее: <span class="k" id="ndAdjVal">0</span> (только если NoData=1)</div>
-          <div class="small">Только если NoData=1</div>
-        </div>
+      <div class="field"><label>Слот</label>
+        <select id="pickSlot"><option value="1">Слот 1</option><option value="2" selected>Слот 2</option><option value="3">Слот 3</option><option value="4">Слот 4</option><option value="5">Слот 5</option></select>
       </div>
-
-      <details id="calcAimBox" style="margin-top:10px">
-        <summary>Тесты</summary>
-        <div class="inline">
-          <div class="field"><label>AimScore</label><input id="aim" type="number" step="1" value="50"/></div>
-        </div>
-      </details>
-
-      <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="btnCalc">Посчитать игрока</button>
-        <button class="btn good" id="btnWrite">Записать в слот</button>
-        <button class="btn" id="btnRand">Случайный игрок</button>
-        <span class="small" id="calcMsg"></span>
-      </div>
-
-      <div class="out" id="playerOut"></div>
-
-      <details style="margin-top:10px">
-        <summary>DEV: детали расчёта</summary>
-        <div id="devOut" class="small" style="margin-top:10px"></div>
-      </details>
+      <div class="field"><label>Игрок (из БД)</label><select id="pickPlayer"></select></div>
     </div>
 
-    <div class="card">
-      <h2>Команды</h2>
+    <div class="inline3">
+      <div class="field">
+        <label>Comm (0–10)</label>
+        <input id="comm" type="range" min="0" max="10" step="1" value="5"/>
+        <div class="small">Текущее: <span class="k" id="commVal">5</span></div>
+      </div>
+      <div class="field">
+        <label>Eng (0–10)</label>
+        <input id="eng" type="range" min="0" max="10" step="1" value="5"/>
+        <div class="small">Текущее: <span class="k" id="engVal">5</span></div>
+      </div>
+      <div class="field" id="calcNoDataBox">
+        <label>NoData manual (±)</label>
+        <input id="ndAdj" type="range" min="-12" max="12" step="1" value="0"/>
+        <div class="small">Текущее: <span class="k" id="ndAdjVal">0</span> (только если NoData=1)</div>
+      </div>
+    </div>
 
-      <div class="grid2">
+    <details id="calcAimBox" style="margin-top:10px">
+      <summary>Тесты</summary>
+      <div class="inline">
+        <div class="field"><label>AimScore</label><input id="aim" type="number" step="1" value="60"/></div>
+      </div>
+    </details>
+
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="btnCalc">Посчитать игрока</button>
+      <button class="btn good" id="btnWrite">Записать в слот</button>
+      <button class="btn" id="btnRand">Случайный игрок</button>
+      <span class="small" id="calcMsg"></span>
+    </div>
+
+    <div class="out" id="playerOut"></div>
+
+    <details style="margin-top:10px">
+      <summary>DEV: детали расчёта</summary>
+      <div id="devOut" class="small" style="margin-top:10px"></div>
+    </details>
+  </div>
+
+  <div class="hr"></div>
+
+  <div class="card">
+    <h2>Команды</h2>
+    <div class="grid2">
+      
         <div class="card">
           <h3>Команда A</h3>
           <div id="teamA"></div>
           <div class="row" style="margin-top:10px">
-            <button class="btn good" id="btnTeamA">Посчитать TeamScore A</button>
+            <button class="btn good" id="btnTeamA">Посчитать Team A</button>
           </div>
           <div class="out" id="teamAOut"></div>
         </div>
@@ -319,28 +341,87 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
           <h3>Команда B</h3>
           <div id="teamB"></div>
           <div class="row" style="margin-top:10px">
-            <button class="btn good" id="btnTeamB">Посчитать TeamScore B</button>
+            <button class="btn good" id="btnTeamB">Посчитать Team B</button>
           </div>
           <div class="out" id="teamBOut"></div>
         </div>
-      </div>
 
-      <div class="hr"></div>
-
-      <div class="card">
-        <h3>Сравнение</h3>
-        <div class="row">
-          <button class="btn warn" id="btnCompare">Сравнить A vs B</button>
-          <button class="btn" id="btnFillRandom">Заполнить рандомно</button>
-          <button class="btn" id="btnResetTeams">Сбросить</button>
+        <div class="card">
+          <h3>Команда C</h3>
+          <div id="teamC"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn good" id="btnTeamC">Посчитать Team C</button>
+          </div>
+          <div class="out" id="teamCOut"></div>
         </div>
-        <div id="compareOut"></div>
+
+        <div class="card">
+          <h3>Команда D</h3>
+          <div id="teamD"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn good" id="btnTeamD">Посчитать Team D</button>
+          </div>
+          <div class="out" id="teamDOut"></div>
+        </div>
+
+        <div class="card">
+          <h3>Команда E</h3>
+          <div id="teamE"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn good" id="btnTeamE">Посчитать Team E</button>
+          </div>
+          <div class="out" id="teamEOut"></div>
+        </div>
+
+        <div class="card">
+          <h3>Команда F</h3>
+          <div id="teamF"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn good" id="btnTeamF">Посчитать Team F</button>
+          </div>
+          <div class="out" id="teamFOut"></div>
+        </div>
+
+        <div class="card">
+          <h3>Команда G</h3>
+          <div id="teamG"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn good" id="btnTeamG">Посчитать Team G</button>
+          </div>
+          <div class="out" id="teamGOut"></div>
+        </div>
+
+        <div class="card">
+          <h3>Команда H</h3>
+          <div id="teamH"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn good" id="btnTeamH">Посчитать Team H</button>
+          </div>
+          <div class="out" id="teamHOut"></div>
+        </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="card">
+      <h3>Общий summary по 8 командам</h3>
+      <div id="teamsSummaryOut"></div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="card">
+      <h3>Legacy compare A/B</h3>
+      <div class="small" style="margin-bottom:8px">Вспомогательный режим: не определяет валидность команд, а только показывает разницу между уже собранными A и B.</div>
+      <div class="row">
+        <button class="btn warn" id="btnCompare">Сравнить A vs B</button>
+        <button class="btn" id="btnFillRandom">Заполнить рандомно</button>
+        <button class="btn" id="btnResetTeams">Сбросить</button>
       </div>
+      <div id="compareOut"></div>
     </div>
   </div>
 </section>
-
-
 <section class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings">
   <div class="grid2">
     <div class="card">
@@ -350,13 +431,20 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       <div class="hr"></div>
 
       <h3>Нормализация R → 0..100</h3>
+      <div class="small">Здесь настраивается базовая шкала игрока и shrinkage по объёму данных.</div>
       <div class="inline3">
         <div class="field"><label>Rmin</label><input id="set_Rmin" type="number" step="0.00001" value="0"/></div>
         <div class="field"><label>Rmax</label><input id="set_Rmax" type="number" step="0.01" value="2.0"/></div>
         <div class="field"><label>R (NoData)</label><input id="set_Rnodata" type="number" step="0.01" value="1.0"/></div>
       </div>
+      <div class="inline3">
+        <div class="field"><label>R_pool</label><input id="set_Rpool" type="number" step="0.01" value="1.0"/></div>
+        <div class="field"><label>k_shrink</label><input id="set_kshrink" type="number" step="1" min="0" value="30"/></div>
+        <div></div>
+      </div>
 
       <h3>Elo-коррекция (вариант B)</h3>
+      <div class="small">Эти параметры меняют форму и силу поправки среды: где она наиболее чувствительна, насколько широкий переход и насколько велика амплитуда.</div>
       <div class="inline3">
         <div class="field"><label>E0</label><input id="set_E0" type="number" step="1" value="2500"/></div>
         <div class="field"><label>W</label><input id="set_W" type="number" step="1" value="500"/></div>
@@ -371,18 +459,74 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       </div>
 
       <h3>Soft / Team</h3>
+      <div class="small">λ управляет смешиванием soft-skill, ND_MIN/ND_MAX — ручной поправкой NoData. Ниже — абсолютные правила валидности команд.</div>
       <div class="inline3">
         <div class="field"><label>λ</label><input id="set_lambda" type="number" step="0.01" min="0" max="0.5" value="0.15"/></div>
-        <div class="field"><label>γ</label><input id="set_gamma" type="number" step="0.05" min="0" max="2" value="0.70"/></div>
+        <div class="field"><label>γ (legacy, не используется)</label><input id="set_gamma" type="number" step="0.05" min="0" max="2" value="0.70" disabled/></div>
         <div class="field"><label>ND_MIN</label><input id="set_NDmin" type="number" step="1" value="-12"/></div>
-        <div class="field"><label>ND_MAX</label><input id="set_NDmax" type="number" step="1" min="0" value="12"/></div>
+        <div class="field"><label>ND_MAX</label><input id="set_NDmax" type="number" step="1" value="12"/></div>
       </div>
       <div class="inline3">
-        </div>
+        <div class="field"><label title="Legacy compare only">T_green</label><input id="set_tgreen" type="number" step="0.1" min="0" value="1.5"/></div>
+        <div class="field"><label title="Legacy compare only">T_yellow</label><input id="set_tyellow" type="number" step="0.1" min="0" value="3.0"/></div>
+        <div></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>TeamPowerMin</label><input id="set_teamPowerMin" type="number" step="0.1" value="35"/></div>
+        <div class="field"><label>TeamPowerMax</label><input id="set_teamPowerMax" type="number" step="0.1" value="75"/></div>
+        <div class="field"><label>RiskCap</label><input id="set_riskCap" type="number" step="1" value="6"/></div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h3>Risk model</h3>
+      <div class="small">Сначала идут пороги распознавания риск-факторов, затем — сами веса risk points.</div>
+      <div class="inline3">
+        <div class="field"><label>lowSample_1 (&lt;)</label><input id="set_lowSample1" type="number" step="1" value="20"/></div>
+        <div class="field"><label>lowSample_2 (&lt;)</label><input id="set_lowSample2" type="number" step="1" value="50"/></div>
+        <div class="field"><label>star_threshold</label><input id="set_starThreshold" type="number" step="0.1" value="85"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>manualAdj_T1</label><input id="set_manualAdjT1" type="number" step="0.1" value="4"/></div>
+        <div class="field"><label>manualAdj_T2</label><input id="set_manualAdjT2" type="number" step="0.1" value="8"/></div>
+        <div class="field"><label>risk_pair</label><input id="set_riskPair" type="number" step="1" value="2"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>gap_T1</label><input id="set_gapT1" type="number" step="0.1" value="30"/></div>
+        <div class="field"><label>gap_T2</label><input id="set_gapT2" type="number" step="0.1" value="45"/></div>
+        <div class="field"><label>2 stars risk</label><input id="set_riskTwoStars" type="number" step="1" value="3"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>Top2Share_T1</label><input id="set_top2shareT1" type="number" step="0.01" value="0.55"/></div>
+        <div class="field"><label>Top2Share_T2</label><input id="set_top2shareT2" type="number" step="0.01" value="0.65"/></div>
+        <div></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>riskNoData</label><input id="set_riskNoData" type="number" step="1" value="2"/></div>
+        <div class="field"><label>riskSecondNoData</label><input id="set_riskSecondNoData" type="number" step="1" value="2"/></div>
+        <div class="field"><label>riskLowSample1</label><input id="set_riskLowSample1" type="number" step="1" value="2"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>riskLowSample2</label><input id="set_riskLowSample2" type="number" step="1" value="1"/></div>
+        <div class="field"><label>riskManual1</label><input id="set_riskManual1" type="number" step="1" value="1"/></div>
+        <div class="field"><label>riskManual2</label><input id="set_riskManual2" type="number" step="1" value="2"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>riskGap1</label><input id="set_riskGap1" type="number" step="1" value="2"/></div>
+        <div class="field"><label>riskGap2</label><input id="set_riskGap2" type="number" step="1" value="3"/></div>
+        <div class="field"><label>riskTop2_1</label><input id="set_riskTop2_1" type="number" step="1" value="2"/></div>
+      </div>
+      <div class="inline3">
+        <div class="field"><label>riskTop2_2</label><input id="set_riskTop2_2" type="number" step="1" value="3"/></div>
+        <div></div><div></div>
+      </div>
+
+
 
       <div class="hr"></div>
 
       <h3>Aim</h3>
+      <div class="small">AimAdj применяется только к NoData и задаётся линейно вокруг A0.</div>
       <div class="inline3">
         <div class="field"><label>A_MAX</label><input id="set_Amax" type="number" step="1" value="12"/></div>
         <div class="field"><label>A0</label><input id="set_A0" type="number" step="1" value="60"/></div>
@@ -420,20 +564,48 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 
       <div class="hr"></div>
 
-      <details>
-        <summary>Как калибровать (коротко)</summary>
-        <div class="small" style="margin-top:8px">
-          • Если на высоком Elo игроки недооцениваются → ↑ <span class="k">BETA</span> или сместить <span class="k">E0</span> вправо.<br/>
-          • Если разница в средней зоне слишком резкая → ↑ <span class="k">W</span> (плавнее).<br/>
-          • Если часто клиппит в 0/100 → поправьте <span class="k">Rmin/Rmax</span>.<br/>
-          • Soft влияет слишком сильно/слабо → <span class="k">λ</span>.
-        </div>
-      </details>
+<div class="card">
+    <h2>Калибровка модели</h2>
+    <div class="small">
+      <p style="margin:0 0 10px"><b>Калибровка игрока</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">Rmin / Rmax</span> — диапазон перевода Rcorr в 0..100. ↑Rmax / ↓Rmin сжимает шкалу, ↓Rmax / ↑Rmin делает её резче.</li>
+        <li><span class="k">R_pool</span> — базовый центр shrinkage. Если увеличить, low-sample игроки в среднем поднимутся.</li>
+        <li><span class="k">k_shrink</span> — сила shrinkage. ↑ делает low-sample игроков ближе к R_pool, ↓ быстрее отпускает к их R_raw.</li>
+        <li><span class="k">E0</span> — центр самой чувствительной зоны Elo-коррекции. ↑ смещает “основную битву среды” вправо.</li>
+        <li><span class="k">W</span> — ширина перехода Elo-коррекции. ↑ делает переход более плавным, ↓ делает его резче.</li>
+        <li><span class="k">BETA</span> — амплитуда Elo-коррекции. ↑ усиливает наказание слабой среды и награду сильной.</li>
+        <li><span class="k">λ</span> — сила смешивания SoftSkill. ↑ усиливает soft-слой, ↓ делает итог ближе к чистому SkillScore.</li>
+        <li><span class="k">A0 / A_MAX_RAW / A_MAX</span> — центр Aim-теста, его raw-диапазон и максимум бонуса/штрафа.</li>
+        <li><span class="k">ND_MIN / ND_MAX</span> — ручной коридор для NoDataAdj.</li>
+        <li><span class="k">R_NODATA</span> — базовый raw prior для NoData до Elo-коррекции.</li>
+      </ul>
+
+      <p style="margin:0 0 10px"><b>Калибровка команды</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">TeamPowerMin / TeamPowerMax</span> — абсолютный коридор допустимой силы команды. Сужение коридора делает правила строже.</li>
+        <li><span class="k">RiskCap</span> — верхний предел суммарного риска. ↓ делает модель осторожнее, ↑ позволяет больше нестабильных составов.</li>
+      </ul>
+
+      <p style="margin:0 0 10px"><b>Калибровка risk model</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">lowSample_1 / lowSample_2</span> — пороги для low-sample риска. ↑ расширяет зону игроков, которых считаем низкой выборкой.</li>
+        <li><span class="k">manualAdj_T1 / manualAdj_T2</span> — пороги крупных ручных корректировок.</li>
+        <li><span class="k">gap_T1 / gap_T2</span> — пороги внутреннего разрыва по силе в команде.</li>
+        <li><span class="k">Top2Share_T1 / Top2Share_T2</span> — насколько top-heavy может быть состав.</li>
+        <li><span class="k">star_threshold</span> — с какого FinalPlayer игрок считается star-player.</li>
+        <li><span class="k">risk_pair</span> — вес одной сыгранной пары в risk, если состав ещё не invalid.</li>
+        <li><span class="k">riskTwoStars</span> — риск за 2 star-player в одной команде.</li>
+        <li><span class="k">riskNoData / riskSecondNoData / riskLowSample1 / riskLowSample2 / riskManual1 / riskManual2 / riskGap1 / riskGap2 / riskTop2_1 / riskTop2_2</span> — сами risk-веса. Их рост делает соответствующий фактор жёстче.</li>
+      </ul>
     </div>
+  </div>
+
+
   </div>
 </section>
 
-  <section class="panel" id="panel-db"  <section class="panel" id="panel-db">
+  <section class="panel" id="panel-db">
     <div class="card">
       <h2>База данных игроков</h2>
       <div class="small">Добавляйте игроков, импортируйте/экспортируйте JSON. Расчёты используют текущие настройки модели.</div>
@@ -497,6 +669,12 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
         </div>
 
         <div class="inline3" style="margin-top:10px">
+          <div class="field"><label>MatchesCount</label><input id="add_matches" type="number" step="1" min="0" value="50"/></div>
+          <div></div>
+          <div></div>
+        </div>
+
+        <div class="inline3" style="margin-top:10px">
           <div class="field"><label>KPR</label><input id="add_kpr" type="number" step="0.01" value="0.75"/></div>
           <div class="field"><label>APR</label><input id="add_apr" type="number" step="0.01" value="0.12"/></div>
           <div class="field"><label>DPR</label><input id="add_dpr" type="number" step="0.01" value="0.70"/></div>
@@ -539,6 +717,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
               <th>id</th>
               <th>nick</th>
               <th>Elo</th>
+              <th class="col-detail">Matches</th>
               <th class="col-detail">KPR</th>
               <th class="col-detail">APR</th>
               <th class="col-detail">DPR</th>
@@ -558,12 +737,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
           <tbody id="dbTable"></tbody>
         </table>
       </div>
-
-      
-    </div>
-  </section>
-
-</main>
+    </section>
 
 <script>
 // Tabs
@@ -587,7 +761,7 @@ function setTab(panelId){
     }
     if(panelId==="panel-db"){
       fillDbQuickFromCfg();
-      setTimeout(()=>drawDbMiniChart(CFG), 80);
+      setTimeout(()=>{ drawDbMiniChart(CFG); drawDbHistogram(CFG); }, 80);
     }
   }
 }
@@ -619,7 +793,7 @@ function calcRatingFromStats(pl){
 function sigmoid(z){ return 1/(1+Math.exp(-z)); }
 function round(x,n=2){ const p=Math.pow(10,n); return Math.round(x*p)/p; }
 
-function calcBaseR(st){
+function calcBaseRRaw(st){
   let R = 0.6844811040150518
     + st.KPR * 0.65597945
     + st.APR * 0.31304591
@@ -627,6 +801,16 @@ function calcBaseR(st){
     + st.ADR * 0.00370714
     + st.MKPR * 0.72169367;
   return Math.max(R, 0);
+}
+function shrinkWeight(n, cfg){
+  const nn = Math.max(0, Number(n||0));
+  return nn / (nn + Math.max(1e-6, Number(cfg.k_shrink||0)));
+}
+function calcBaseR(st, cfg = CFG){
+  const raw = calcBaseRRaw(st);
+  if(st.NoData) return cfg.R_NODATA;
+  const w = shrinkWeight(st.MatchesCount, cfg);
+  return w * raw + (1 - w) * cfg.R_pool;
 }
 function skillScoreFromR(Rcorr, cfg){
   const t = clamp((Rcorr - cfg.Rmin)/(cfg.Rmax - cfg.Rmin), 0, 1);
@@ -656,24 +840,22 @@ function noDataAdj(noData, ndAdj, cfg){
 }
 function calcPlayer(player, ui, cfg){
   const NoData = !!player.NoData;
-  const R = NoData ? cfg.R_NODATA : calcBaseR(player);
-  let Rcorr = R, sig=null, dR=0;
-  if(!NoData){
-    sig = sigmoid((player.Elo - cfg.E0)/cfg.W);
-    dR = cfg.BETA * (2*sig - 1);
-    Rcorr = R + dR;
-  }
+  const R_raw = NoData ? cfg.R_NODATA : calcBaseRRaw(player);
+  const R_used = NoData ? cfg.R_NODATA : calcBaseR(player, cfg);
+
+  const eloForCorr = NoData ? Number(player.Elo || 1150) : Number(player.Elo || 0);
+  const sig = sigmoid((eloForCorr - cfg.E0)/cfg.W);
+  const dR = cfg.BETA * (2*sig - 1);
+  const Rcorr = NoData ? (cfg.R_NODATA + dR) : (R_used + dR);
+
   const SkillScore = skillScoreFromR(Rcorr, cfg);
   const Soft = softSkill(ui.Comm, ui.Eng);
   const BaseMix = (1-cfg.lambda)*SkillScore + cfg.lambda*Soft;
-
-  // AimAdj applies ONLY to NoData players
   const A = NoData ? aimAdj(ui.AimScore, cfg) : 0;
-
   const ND = noDataAdj(NoData, ui.NoDataAdj, cfg);
   const FinalRaw = BaseMix + A + ND;
   const Final = clamp(FinalRaw, 0, 100);
-  return {NoData,R,Rcorr,sig,dR,SkillScore,Soft,BaseMix,A,ND,FinalRaw,Final};
+  return {NoData,R:R_used,R_raw,R_used,Rcorr,sig,dR,SkillScore,Soft,BaseMix,A,ND,FinalRaw,Final};
 }
 function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
 function std(arr){
@@ -683,8 +865,7 @@ function std(arr){
 }
 function teamScore(teamFinalPlayers, cfg){
   const m = mean(teamFinalPlayers);
-  const sd = std(teamFinalPlayers);
-  return {mean:m, std:sd, score: m - cfg.gamma*sd};
+  return {mean:m, power:m};
 }
 
 // Fake DB
@@ -712,7 +893,8 @@ function genPlayer(i){
   const ADR = clamp(randBetween(65, 100) + 8*(eloT-0.5) + randBetween(-6, 6), 40, 120);
   const APR = clamp(randBetween(0.06, 0.18) + randBetween(-0.03, 0.03), 0.00, 0.30);
   const MKPR = clamp(randBetween(0.06, 0.22) + 0.05*(eloT-0.5) + randBetween(-0.04, 0.04), 0.00, 0.35);
-  return {id:"p"+(i+1), nick:genNick(i), NoData:false, Elo, KPR, APR, DPR, ADR, MKPR};
+  const MatchesCount = rint(5, 180);
+  return {id:"p"+(i+1), nick:genNick(i), NoData:false, Elo, MatchesCount, KPR, APR, DPR, ADR, MKPR};
 }
 function genSynergyEdges(players){
   const ids = players.map(p=>p.id);
@@ -741,13 +923,15 @@ function regenDB(N=36){
 // Config
 let CFG = null; window.CFG = null;
 function readCfg(){
-  return {
+  const cfg = {
     Rmin: getNum("set_Rmin", 0.6844811),
     Rmax: getNum("set_Rmax", 2.0),
     R_NODATA: getNum("set_Rnodata", 1.0),
+    R_pool: getNum("set_Rpool", 1.0),
+    k_shrink: Math.max(0, getNum("set_kshrink", 30)),
 
-    E0: getNum("set_E0", 2000),
-    W: getNum("set_W", 700),
+    E0: getNum("set_E0", 2500),
+    W: getNum("set_W", 500),
     BETA: getNum("set_BETA", 0.35),
 
     ptsN: Math.max(0, getInt("set_ptsN", 5)),
@@ -758,15 +942,52 @@ function readCfg(){
     ND_MIN: getNum("set_NDmin", -12),
     ND_MAX: getNum("set_NDmax", 12),
 
-    // Aim-test calibration (not shown in UI in this build)
-    A0: getNum("set_A0", 60),        // "neutral" aim score
-A_MAX_RAW: getNum("set_Amaxraw", 120),
+    A0: getNum("set_A0", 60),
+    A_MAX_RAW: getNum("set_Amaxraw", 120),
     A_MAX: Math.max(0, getNum("set_Amax", 12)),
 
     gamma: Math.max(0, getNum("set_gamma", 0.70)),
-    T_green: Math.max(0, getNum("set_Tgreen", 1.5)),
-    T_yellow: Math.max(0, getNum("set_Tyellow", 3.0)),
+    T_green: Math.max(0, getNum("set_tgreen", 1.5)),
+    T_yellow: Math.max(0, getNum("set_tyellow", 3.0)),
+
+    TeamPowerMin: getNum("set_teamPowerMin", 35),
+    TeamPowerMax: getNum("set_teamPowerMax", 75),
+    RiskCap: Math.max(0, getNum("set_riskCap", 6)),
+
+    lowSample1: Math.max(0, getNum("set_lowSample1", 20)),
+    lowSample2: Math.max(0, getNum("set_lowSample2", 50)),
+    starThreshold: getNum("set_starThreshold", 85),
+
+    manualAdjT1: Math.max(0, getNum("set_manualAdjT1", 4)),
+    manualAdjT2: Math.max(0, getNum("set_manualAdjT2", 8)),
+    riskPair: Math.max(0, getNum("set_riskPair", 2)),
+
+    gapT1: Math.max(0, getNum("set_gapT1", 30)),
+    gapT2: Math.max(0, getNum("set_gapT2", 45)),
+    riskTwoStars: Math.max(0, getNum("set_riskTwoStars", 3)),
+
+    top2shareT1: clamp(getNum("set_top2shareT1", 0.55), 0, 1),
+    top2shareT2: clamp(getNum("set_top2shareT2", 0.65), 0, 1),
+
+    riskNoData: Math.max(0, getNum("set_riskNoData", 2)),
+    riskSecondNoData: Math.max(0, getNum("set_riskSecondNoData", 2)),
+    riskLowSample1: Math.max(0, getNum("set_riskLowSample1", 2)),
+    riskLowSample2: Math.max(0, getNum("set_riskLowSample2", 1)),
+    riskManual1: Math.max(0, getNum("set_riskManual1", 1)),
+    riskManual2: Math.max(0, getNum("set_riskManual2", 2)),
+    riskGap1: Math.max(0, getNum("set_riskGap1", 2)),
+    riskGap2: Math.max(0, getNum("set_riskGap2", 3)),
+    riskTop2_1: Math.max(0, getNum("set_riskTop2_1", 2)),
+    riskTop2_2: Math.max(0, getNum("set_riskTop2_2", 3)),
   };
+  cfg.Rmax = Math.max(cfg.Rmin + 0.01, cfg.Rmax);
+  cfg.T_yellow = Math.max(cfg.T_green, cfg.T_yellow);
+  cfg.TeamPowerMax = Math.max(cfg.TeamPowerMin, cfg.TeamPowerMax);
+  cfg.lowSample2 = Math.max(cfg.lowSample1, cfg.lowSample2);
+  cfg.manualAdjT2 = Math.max(cfg.manualAdjT1, cfg.manualAdjT2);
+  cfg.gapT2 = Math.max(cfg.gapT1, cfg.gapT2);
+  cfg.top2shareT2 = Math.max(cfg.top2shareT1, cfg.top2shareT2);
+  return cfg;
 }
 function exportCfgJson(){
   document.getElementById("cfgJson").value = JSON.stringify(CFG);
@@ -786,13 +1007,84 @@ function involvedSynergyPlayers(teamIds){
   for(const e of DB.synergyEdges){ if(set.has(e.a) && set.has(e.b)){ bad.add(e.a); bad.add(e.b); } }
   return bad;
 }
+
+function analyzeTeamSynergy(teamIds){
+  const set = new Set(teamIds.filter(Boolean));
+  const activeEdges = [];
+  const seen = new Set();
+
+  for(const e of DB.synergyEdges){
+    if(!e || !set.has(e.a) || !set.has(e.b) || e.a===e.b) continue;
+    const k = e.a < e.b ? `${e.a}|${e.b}` : `${e.b}|${e.a}`;
+    if(seen.has(k)) continue;
+    seen.add(k);
+    activeEdges.push({a:e.a,b:e.b});
+  }
+
+  const pairCount = activeEdges.length;
+  const adjacency = new Map();
+  for(const id of set) adjacency.set(id, new Set());
+  for(const e of activeEdges){
+    adjacency.get(e.a)?.add(e.b);
+    adjacency.get(e.b)?.add(e.a);
+  }
+
+  let hasThreeLinked = false;
+  const involved = new Set();
+
+  for(const id of adjacency.keys()){
+    const neigh = adjacency.get(id);
+    if(neigh && neigh.size){
+      involved.add(id);
+      for(const n of neigh) involved.add(n);
+    }
+  }
+
+  // connected component of size >=3 means 3 linked players via pair synergy
+  const visited = new Set();
+  for(const id of adjacency.keys()){
+    if(visited.has(id) || adjacency.get(id).size===0) continue;
+    const stack = [id];
+    visited.add(id);
+    let size = 0;
+    while(stack.length){
+      const cur = stack.pop();
+      size++;
+      for(const nxt of adjacency.get(cur)){
+        if(!visited.has(nxt)){
+          visited.add(nxt);
+          stack.push(nxt);
+        }
+      }
+    }
+    if(size >= 3){
+      hasThreeLinked = true;
+    }
+  }
+
+  const reasons = [];
+  if(pairCount >= 2) reasons.push("2+ played pairs detected");
+  if(hasThreeLinked) reasons.push("3 linked players detected via pair synergy");
+
+  return {
+    pairCount,
+    activeEdges,
+    hasThreeLinked,
+    invalid: reasons.length > 0,
+    reasons,
+    involved
+  };
+}
+
 function ensurePlayerFields(p){
   if(p.Comm==null) p.Comm = 0;
   if(p.Eng==null) p.Eng = 0;
   if(p.AimAdj==null) p.AimAdj = 0;
   if(p.NoDataAdj==null) p.NoDataAdj = 0;
   if(p.NoData==null) p.NoData = false;
-  // Elo default for NoData display/plots
+  if(p.MatchesCount==null || !Number.isFinite(Number(p.MatchesCount))) p.MatchesCount = p.NoData ? 0 : 0;
+  p.MatchesCount = Math.max(0, Math.round(Number(p.MatchesCount||0)));
+  // NoData Elo defaults to 1150 so Elo-correction still applies in a conservative way.
   if((p.Elo==null || !Number.isFinite(Number(p.Elo))) && p.NoData) p.Elo = 1150;
 }
 function playerUIFromDB(p){
@@ -807,25 +1099,36 @@ function calcForTable(p){
   if(!CFG) { try{ CFG = readCfg(); window.CFG = CFG; } catch(e){ /* ignore */ } }
   ensurePlayerFields(p);
 
-  // Compute base mix with neutral aim, then add stored AimAdj and NoDataAdj
-  const res = calcPlayer(p, {Comm:Number(p.Comm||0), Eng:Number(p.Eng||0), NoDataAdj:Number(p.NoDataAdj||0), AimScore: (CFG?.A0 ?? 50)}, CFG);
+  const res = calcPlayer(p, {Comm:Number(p.Comm||0), Eng:Number(p.Eng||0), NoDataAdj:Number(p.NoDataAdj||0), AimScore:(CFG?.A0 ?? 60)}, CFG);
 
-  // overwrite AimAdj with stored value (if any)
-  res.A = Number.isFinite(Number(p.AimAdj)) ? Number(p.AimAdj) : 0;
-
+  // stored AimAdj is only allowed for NoData players
+  res.A = (!!p.NoData && Number.isFinite(Number(p.AimAdj))) ? Number(p.AimAdj) : 0;
   const ND = noDataAdj(!!p.NoData, Number(p.NoDataAdj||0), CFG);
   res.ND = ND;
-
   const FinalRaw = res.BaseMix + res.A + ND;
   res.FinalRaw = FinalRaw;
   res.Final = clamp(FinalRaw, 0, 100);
+
+  p._riskMarkers = buildRiskMarkers(p, res, CFG);
+  p._lastCalc = {Final:res.Final, SkillScore:res.SkillScore, Rcorr:res.Rcorr};
   return res;
 }
+
+function buildRiskMarkers(p, res, cfg){
+  const mc = Math.max(0, Number(p.MatchesCount||0));
+  const manualAbs = Math.abs(Number(p.NoDataAdj||0));
+  const isNoData = !!p.NoData;
+  const isLowSample = !isNoData && mc < cfg.lowSample2;
+  const isExpertAdjusted = manualAbs > 0;
+  const isHighManualAdjustment = manualAbs >= cfg.manualAdjT1;
+  const isStarPlayer = Number(res.Final||0) >= cfg.starThreshold;
+  const isPotentialOutlier = (isNoData && Number(res.Final||0) >= cfg.starThreshold) || (!isNoData && mc < cfg.lowSample1 && Number(res.Final||0) >= cfg.starThreshold) || manualAbs >= cfg.manualAdjT2;
+  return {isNoData,isLowSample,isExpertAdjusted,isHighManualAdjustment,isStarPlayer,isPotentialOutlier,MatchesCount:mc,manualAbs};
+}
+
 function renderDB(){
-  // sanitize players
   DB.players.forEach(ensurePlayerFields);
 
-  // player picker
   const sel = document.getElementById("pickPlayer");
   const prevPick = sel ? sel.value : "";
   sel.innerHTML = "";
@@ -837,7 +1140,6 @@ function renderDB(){
   });
   if(prevPick){ sel.value = prevPick; }
 
-  // table
   const wrap = document.getElementById("dbTableWrap");
   const tbody = document.getElementById("dbTable");
   if(!tbody) return;
@@ -846,11 +1148,13 @@ function renderDB(){
   DB.players.forEach(p=>{
     const res = calcForTable(p);
     const Rbase = p.NoData ? CFG.R_NODATA : res.R;
+    const effectiveAimAdj = p.NoData ? round(Number(p.AimAdj||0),1) : 0;
     const tr=document.createElement("tr");
     tr.innerHTML = `
       <td class="mono">${p.id}</td>
       <td>${p.nick}</td>
       <td class="mono">${p.Elo ?? ""}</td>
+      <td class="mono col-detail">${p.MatchesCount ?? 0}</td>
       <td class="mono col-detail">${p.NoData ? "" : round(p.KPR,3)}</td>
       <td class="mono col-detail">${p.NoData ? "" : round(p.APR,3)}</td>
       <td class="mono col-detail">${p.NoData ? "" : round(p.DPR,3)}</td>
@@ -858,7 +1162,7 @@ function renderDB(){
       <td class="mono col-detail">${p.NoData ? "" : round(p.MKPR,3)}</td>
       <td class="mono col-detail">${round(p.Comm,0)}</td>
       <td class="mono col-detail">${round(p.Eng,0)}</td>
-      <td class="mono col-detail">${round(p.AimAdj,1)}</td>
+      <td class="mono col-detail">${effectiveAimAdj}</td>
       <td class="mono col-detail">${round(p.NoDataAdj,1)}</td>
       <td class="mono">${round(Rbase,4)}</td>
       <td class="mono">${round(res.Rcorr,4)}</td>
@@ -869,22 +1173,32 @@ function renderDB(){
     tbody.appendChild(tr);
   });
 
-  // show/hide details
   const chk = document.getElementById("dbShowDetails");
-  if(chk && wrap){
-    wrap.classList.toggle("hideDetails", !chk.checked);
-  }
+  if(chk && wrap) wrap.classList.toggle("hideDetails", !chk.checked);
 
   updateCalcVisibility();
   syncNdSliderFromCfg();
 }
 
 // Teams
+const TEAM_KEYS = ["A","B","C","D","E","F","G","H"];
 const team = {
   A:[null,null,null,null,null],
   B:[null,null,null,null,null],
+  C:[null,null,null,null,null],
+  D:[null,null,null,null,null],
+  E:[null,null,null,null,null],
+  F:[null,null,null,null,null],
+  G:[null,null,null,null,null],
+  H:[null,null,null,null,null],
   finalsA:[50,50,50,50,50],
   finalsB:[50,50,50,50,50],
+  finalsC:[50,50,50,50,50],
+  finalsD:[50,50,50,50,50],
+  finalsE:[50,50,50,50,50],
+  finalsF:[50,50,50,50,50],
+  finalsG:[50,50,50,50,50],
+  finalsH:[50,50,50,50,50],
 };
 function outBox(label, value, hint, cls=""){
   return `<div class="outbox ${cls}"><div class="hint">${label}<div class="small">${hint||""}</div></div><div class="val ${cls? "big":""}">${value}</div></div>`;
@@ -979,10 +1293,10 @@ function refreshAllDbDependentUI(){
   }
 }
 function renderTeams(){
-  const a=document.getElementById("teamA"), b=document.getElementById("teamB");
-  a.innerHTML=""; b.innerHTML="";
-
-  const build=(which, root)=>{
+  for(const which of TEAM_KEYS){
+    const root=document.getElementById(`team${which}`);
+    if(!root) continue;
+    root.innerHTML="";
     for(let i=0;i<5;i++){
       const pid = team[which][i];
       let final = 50;
@@ -993,12 +1307,12 @@ function renderTeams(){
           final = res.Final;
         }
       }
-      if(which==="A") team.finalsA[i]=final; else team.finalsB[i]=final;
+      team[`finals${which}`][i]=final;
 
       const div=document.createElement("div");
       div.className="field";
       div.innerHTML = `<label>Слот ${i+1}</label>
-        <select class="slotSel" data-team="${which}" data-idx="${i}"></select>
+        <select class="slotSel" data-team="${which}" data-idx="${i}" data-pid="${pid || ""}"></select>
         <div class="small">FinalPlayer: <span class="k" id="${which}final${i}">${round(final,1)}</span></div>`;
       root.appendChild(div);
 
@@ -1023,14 +1337,16 @@ function renderTeams(){
           const pl = playerById(team[which][idx]);
           if(pl){ f = calcForTable(pl).Final; }
         }
-        if(which==="A") team.finalsA[idx]=f; else team.finalsB[idx]=f;
+        team[`finals${which}`][idx]=f;
         document.getElementById(`${which}final${idx}`).textContent = round(f,1);
+        const out = document.getElementById(`team${which}Out`);
+        if(out) out.innerHTML = "";
+        document.getElementById("compareOut").innerHTML = "";
+        delete teamResults[which];
+        updateTeamsSummary();
       };
     }
-  };
-
-  build("A", a);
-  build("B", b);
+  }
 }
 
 function calcAndShowPlayer(){
@@ -1059,7 +1375,7 @@ function calcAndShowPlayer(){
     <div class="mono">BaseMix=(1-λ)*SkillScore + λ*SoftSkill=${round(res.BaseMix,2)}</div>
     <div class="mono">FinalRaw=BaseMix+AimAdj+ND=${round(res.FinalRaw,2)}; Final=${round(res.Final,2)}</div>
   `;
-  document.getElementById("calcMsg").textContent = p.NoData ? "NoData=1: R=R_NODATA, Elo-коррекция не применяется." : "Faceit: R по стате + Elo-коррекция.";
+  document.getElementById("calcMsg").textContent = p.NoData ? "NoData=1: берём R_NODATA и применяем Elo-коррекцию (fallback Elo=1150, если реального Elo нет)." : "Faceit: R_raw → shrinkage → Elo-коррекция.";
 
   renderDB();
   renderTeams();
@@ -1075,62 +1391,187 @@ function writeToSlot(){
   const which=document.getElementById("pickTeam").value;
   const idx=Number(document.getElementById("pickSlot").value)-1;
   team[which][idx] = calc.p.id;
-  if(which==="A") team.finalsA[idx]=calc.res.Final; else team.finalsB[idx]=calc.res.Final;
+  team[`finals${which}`][idx]=calc.res.Final;
   renderTeams();
 }
+
+function teamRisk(teamIds, cfg, synergy){
+  const players = teamIds.map(playerById).filter(Boolean);
+  const infos = players.map(p => ({p, res: calcForTable(p), mk: p._riskMarkers || {}}));
+  const finals = infos.map(x => x.res.Final);
+  const riskReasons = [];
+  let risk = 0;
+
+  const noDataCount = infos.filter(x => x.mk.isNoData).length;
+  if(noDataCount >= 1){ risk += cfg.riskNoData; riskReasons.push(`NoData players: +${cfg.riskNoData}`); }
+  if(noDataCount >= 2){ risk += cfg.riskSecondNoData; riskReasons.push(`second NoData: +${cfg.riskSecondNoData}`); }
+
+  for(const x of infos){
+    if(x.mk.isNoData) continue;
+    const mc = x.mk.MatchesCount || 0;
+    if(mc < cfg.lowSample1){ risk += cfg.riskLowSample1; riskReasons.push(`${x.p.nick}: low sample < ${cfg.lowSample1} (+${cfg.riskLowSample1})`); }
+    else if(mc < cfg.lowSample2){ risk += cfg.riskLowSample2; riskReasons.push(`${x.p.nick}: low sample ${cfg.lowSample1}-${cfg.lowSample2-1} (+${cfg.riskLowSample2})`); }
+  }
+
+  for(const x of infos){
+    const a = Math.abs(Number(x.p.NoDataAdj||0));
+    if(a >= cfg.manualAdjT2){ risk += cfg.riskManual2; riskReasons.push(`${x.p.nick}: |manual adj| ≥ ${cfg.manualAdjT2} (+${cfg.riskManual2})`); }
+    else if(a >= cfg.manualAdjT1){ risk += cfg.riskManual1; riskReasons.push(`${x.p.nick}: |manual adj| ≥ ${cfg.manualAdjT1} (+${cfg.riskManual1})`); }
+  }
+
+  if(synergy && synergy.pairCount === 1){
+    risk += cfg.riskPair;
+    riskReasons.push(`1 played pair (+${cfg.riskPair})`);
+  }
+
+  const maxF = finals.length ? Math.max(...finals) : 0;
+  const minF = finals.length ? Math.min(...finals) : 0;
+  const gap = maxF - minF;
+  if(gap >= cfg.gapT2){ risk += cfg.riskGap2; riskReasons.push(`gap ≥ ${cfg.gapT2} (+${cfg.riskGap2})`); }
+  else if(gap >= cfg.gapT1){ risk += cfg.riskGap1; riskReasons.push(`gap ≥ ${cfg.gapT1} (+${cfg.riskGap1})`); }
+
+  const sorted = finals.slice().sort((a,b)=>b-a);
+  const sum = finals.reduce((a,b)=>a+b,0);
+  const top2 = (sorted[0]||0) + (sorted[1]||0);
+  const top2Share = sum > 0 ? top2 / sum : 0;
+  if(top2Share >= cfg.top2shareT2){ risk += cfg.riskTop2_2; riskReasons.push(`Top2Share ≥ ${cfg.top2shareT2} (+${cfg.riskTop2_2})`); }
+  else if(top2Share >= cfg.top2shareT1){ risk += cfg.riskTop2_1; riskReasons.push(`Top2Share ≥ ${cfg.top2shareT1} (+${cfg.riskTop2_1})`); }
+
+  const starCount = infos.filter(x => x.mk.isStarPlayer).length;
+  if(starCount >= 2){ risk += cfg.riskTwoStars; riskReasons.push(`2 star players (+${cfg.riskTwoStars})`); }
+
+  return {risk, reasons:riskReasons, gap, top2Share, starCount, noDataCount};
+}
+
 function calcTeam(which){
-  const root=document.getElementById(which==="A"?"teamA":"teamB");
-  const out=document.getElementById(which==="A"?"teamAOut":"teamBOut");
-  // clear highlights
+  const root=document.getElementById(`team${which}`);
+  const out=document.getElementById(`team${which}Out`);
+  if(!root || !out) return null;
   root.querySelectorAll("select").forEach(s=>s.classList.remove("badline","warnline"));
 
-  const ids=team[which].slice();
-    const edges = 0;
+  const ids = team[which].slice();
+  const finals = team[`finals${which}`];
+  const power = teamScore(finals, CFG);
+  const synergy = analyzeTeamSynergy(ids);
+  const risk = teamRisk(ids, CFG, synergy);
 
-  const finals = which==="A" ? team.finalsA : team.finalsB;
-  const res = teamScore(finals, CFG);
+  if(synergy.involved.size){
+    root.querySelectorAll("select.slotSel").forEach((s, idx)=>{
+      const pid = team[which][idx];
+      if(pid && synergy.involved.has(pid)) s.classList.add("badline");
+    });
+  }
+
+  const reasons = [];
+  if(synergy.invalid) reasons.push(...synergy.reasons);
+  if(power.power < CFG.TeamPowerMin || power.power > CFG.TeamPowerMax){
+    reasons.push(`TeamPower outside corridor [${CFG.TeamPowerMin}..${CFG.TeamPowerMax}]`);
+  }
+  if(risk.risk > CFG.RiskCap){
+    reasons.push(`TeamRisk > RiskCap (${round(risk.risk,1)} > ${CFG.RiskCap})`);
+  }
+  const valid = reasons.length === 0;
+  const reasonsHtml = reasons.map(r=>`<li>${r}</li>`).join("");
+  const riskHtml = risk.reasons.map(r=>`<li>${r}</li>`).join("");
+
   out.innerHTML = `
     <div class="out">
-      ${outBox("TeamScore", round(res.score,1), "Mean − γ·Std", "final")}
-      ${outBox("Mean", round(res.mean,1), "Средняя сила")}
-      ${outBox("Std", round(res.std,1), "Перекос")}
-      
-    </div>`;
-  return res;
+      ${outBox("TeamPower", round(power.power,1), "Mean(FinalPlayer)", valid ? "final" : "")}
+      ${outBox("TeamRisk", round(risk.risk,1), "Σ risk points")}
+      ${outBox("Gap", round(risk.gap,1), "max - min")}
+      ${outBox("Top2Share", round(risk.top2Share,2), "top2 / sum")}
+    </div>
+    <div class="outbox ${valid ? "" : "badline"}" style="margin-top:10px">
+      <div class="hint"><b>${valid ? "Состав проходит проверку" : "Состав не проходит проверку"}</b></div>
+      <div class="small" style="margin-top:6px">Условия: no invalid rules, TeamPower ∈ [${CFG.TeamPowerMin}..${CFG.TeamPowerMax}], TeamRisk ≤ ${CFG.RiskCap}.</div>
+      ${reasonsHtml ? `<ul class="small" style="margin:8px 0 0 18px;padding:0">${reasonsHtml}</ul>` : ""}
+      ${riskHtml ? `<details style="margin-top:8px"><summary>Risk details</summary><ul class="small" style="margin:8px 0 0 18px;padding:0">${riskHtml}</ul></details>` : ""}
+    </div>
+  `;
+  const result = {...power, valid, invalidReasons: reasons, TeamPower: power.power, TeamRisk: risk.risk, riskDetails:risk.reasons, synergyInvalid: synergy.invalid, synergyReasons: synergy.reasons, synergyPairCount: synergy.pairCount, synergyThreeLinked: synergy.hasThreeLinked};
+  teamResults[which] = result;
+  updateTeamsSummary();
+  return result;
 }
-let lastA=null,lastB=null;
+let lastA=null; let lastB=null; let teamResults={};
+
+function updateTeamsSummary(){
+  const out = document.getElementById("teamsSummaryOut");
+  if(!out) return;
+  const arr = TEAM_KEYS.map(k => teamResults[k]).filter(Boolean);
+  if(!arr.length){
+    out.innerHTML = '<div class="outbox"><div class="small">Посчитайте команды, чтобы увидеть summary.</div></div>';
+    return;
+  }
+  const powers = arr.map(x=>x.TeamPower);
+  const risks = arr.map(x=>x.TeamRisk);
+  const validCount = arr.filter(x=>x.valid).length;
+  const avgPower = powers.reduce((a,b)=>a+b,0)/powers.length;
+  const minPower = Math.min(...powers);
+  const maxPower = Math.max(...powers);
+  const avgRisk = risks.reduce((a,b)=>a+b,0)/risks.length;
+  out.innerHTML = `
+    <div class="out">
+      ${outBox("avg TeamPower", round(avgPower,1), "Средняя сила по посчитанным командам")}
+      ${outBox("min TeamPower", round(minPower,1), "Минимальная сила")}
+      ${outBox("max TeamPower", round(maxPower,1), "Максимальная сила")}
+      ${outBox("avg TeamRisk", round(avgRisk,1), "Средний риск")}
+      ${outBox("valid teams count", validCount, "Сколько команд сейчас проходят правила")}
+    </div>
+  `;
+}
 function compareTeams(){
   const out=document.getElementById("compareOut");
-  if(!lastA || !lastB){ out.innerHTML=`<div class="outbox"><div class="small">Сначала посчитайте TeamScore A и TeamScore B.</div></div>`; return; }
-  const d=Math.abs(lastA.score-lastB.score);
-  let cls="", msg="Команды равны";
-  if(d>CFG.tyellow){ cls="badline"; msg="Команды НЕ равны — пересоберите"; }
-  else if(d>CFG.tgreen){ cls="warnline"; msg="Погранично — можно улучшить баланс"; }
-  out.innerHTML = `<div class="outbox ${cls}" style="margin-top:10px">
-    <div class="hint"><b>Δ = |A − B| = <span class="k">${round(d,2)}</span></b> — ${msg}</div>
-    <div class="small">Пороги: green ≤ ${CFG.tgreen}, yellow ≤ ${CFG.tyellow}.</div>
-  </div>`;
+  if(!lastA || !lastB){
+    out.innerHTML=`<div class="outbox"><div class="small">Сначала посчитайте команды A и B.</div></div>`;
+    return;
+  }
+
+  const delta = Math.abs(lastA.TeamPower - lastB.TeamPower);
+  const bothValid = lastA.valid && lastB.valid;
+
+  out.innerHTML = `
+    <div class="out">
+      ${outBox("A TeamPower", round(lastA.TeamPower,1), "Сила команды A", lastA.valid ? "final" : "")}
+      ${outBox("A TeamRisk", round(lastA.TeamRisk,1), "Риск команды A")}
+      ${outBox("B TeamPower", round(lastB.TeamPower,1), "Сила команды B", lastB.valid ? "final" : "")}
+      ${outBox("B TeamRisk", round(lastB.TeamRisk,1), "Риск команды B")}
+    </div>
+    <div class="outbox ${bothValid ? "" : "badline"}" style="margin-top:10px">
+      <div class="hint"><b>${bothValid ? "Обе команды проходят абсолютные правила" : "Одна или обе команды не проходят абсолютные правила"}</b></div>
+      <div class="small" style="margin-top:6px">ΔPower = ${round(delta,2)} (информационно; не основной критерий).</div>
+      ${lastA.invalidReasons?.length ? `<div class="small" style="margin-top:8px"><b>A:</b> ${lastA.invalidReasons.join("; ")}</div>` : ""}
+      ${lastB.invalidReasons?.length ? `<div class="small" style="margin-top:4px"><b>B:</b> ${lastB.invalidReasons.join("; ")}</div>` : ""}
+    </div>
+  `;
 }
 function fillRandomTeams(){
   const ids=DB.players.map(p=>p.id).sort(()=>Math.random()-0.5);
-  team.A=ids.slice(0,5); team.B=ids.slice(5,10);
-  const ui=getUiInputs();
-  team.finalsA = team.A.map(id=>calcPlayer(playerById(id), ui, CFG).Final);
-  team.finalsB = team.B.map(id=>calcPlayer(playerById(id), ui, CFG).Final);
+  for(let i=0;i<TEAM_KEYS.length;i++){
+    const which = TEAM_KEYS[i];
+    team[which] = ids.slice(i*5, i*5+5);
+    team[`finals${which}`] = team[which].map(id=> id ? calcForTable(playerById(id)).Final : 50);
+  }
   renderTeams();
-  document.getElementById("teamAOut").innerHTML="";
-  document.getElementById("teamBOut").innerHTML="";
+  for(const which of TEAM_KEYS){
+    const out = document.getElementById(`team${which}Out`);
+    if(out) out.innerHTML = "";
+  }
   document.getElementById("compareOut").innerHTML="";
-  lastA=null; lastB=null;
+  lastA=null; lastB=null; teamResults={};
+  updateTeamsSummary();
 }
 function resetTeams(){
-  team.A=[null,null,null,null,null]; team.B=[null,null,null,null,null];
-  team.finalsA=[50,50,50,50,50]; team.finalsB=[50,50,50,50,50];
+  for(const which of TEAM_KEYS){
+    team[which] = [null,null,null,null,null];
+    team[`finals${which}`] = [50,50,50,50,50];
+    const out = document.getElementById(`team${which}Out`);
+    if(out) out.innerHTML = "";
+  }
   renderTeams();
-  document.getElementById("teamAOut").innerHTML="";
-  document.getElementById("teamBOut").innerHTML="";
   document.getElementById("compareOut").innerHTML="";
-  lastA=null; lastB=null;
+  lastA=null; lastB=null; teamResults={};
+  updateTeamsSummary();
 }
 
 // Sliders display
@@ -1416,10 +1857,12 @@ function applyCfg(){
   // sync UI helpers (if present)
   try{ fillDbQuickFromCfg(); }catch(e){}
   try{ syncNdSliderFromCfg(); }catch(e){}
+  try{ exportCfgJson(); }catch(e){}
 
   // refresh all UI dependent on CFG/DB
   renderDB();
   renderTeams();
+  updateTeamsSummary();
   safeRedrawCharts();
   try{ drawDbMiniChart(CFG); }catch(e){}
   try{ drawDbHistogram(CFG); }catch(e){}
@@ -1522,7 +1965,7 @@ document.getElementById("fileImportCfg").addEventListener("change", async (ev)=>
   const f = ev.target.files && ev.target.files[0]; if(!f) return;
   try{ const obj = JSON.parse(await f.text());
     // apply known keys
-    const map = {E0:"set_E0", W:"set_W", BETA:"set_BETA", Rmin:"set_Rmin", Rmax:"set_Rmax", lambda:"set_lambda", R_NODATA:"set_Rnodata", ptsN:"set_ptsN"};
+    const map = {E0:"set_E0", W:"set_W", BETA:"set_BETA", Rmin:"set_Rmin", Rmax:"set_Rmax", R_pool:"set_Rpool", k_shrink:"set_kshrink", lambda:"set_lambda", R_NODATA:"set_Rnodata", ptsN:"set_ptsN", histBin:"set_histBin", gamma:"set_gamma", T_green:"set_tgreen", T_yellow:"set_tyellow", ND_MIN:"set_NDmin", ND_MAX:"set_NDmax", A0:"set_A0", A_MAX:"set_Amax", A_MAX_RAW:"set_Amaxraw", TeamPowerMin:"set_teamPowerMin", TeamPowerMax:"set_teamPowerMax", RiskCap:"set_riskCap", lowSample1:"set_lowSample1", lowSample2:"set_lowSample2", starThreshold:"set_starThreshold", manualAdjT1:"set_manualAdjT1", manualAdjT2:"set_manualAdjT2", riskPair:"set_riskPair", gapT1:"set_gapT1", gapT2:"set_gapT2", riskTwoStars:"set_riskTwoStars", top2shareT1:"set_top2shareT1", top2shareT2:"set_top2shareT2", riskNoData:"set_riskNoData", riskSecondNoData:"set_riskSecondNoData", riskLowSample1:"set_riskLowSample1", riskLowSample2:"set_riskLowSample2", riskManual1:"set_riskManual1", riskManual2:"set_riskManual2", riskGap1:"set_riskGap1", riskGap2:"set_riskGap2", riskTop2_1:"set_riskTop2_1", riskTop2_2:"set_riskTop2_2"};
     for(const k in map){ if(obj[k]!=null){ const el=document.getElementById(map[k]); if(el) el.value=obj[k]; } }
     applyCfg();
   }catch(e){ console.log(e); }
@@ -1568,7 +2011,7 @@ function addManualPlayer(){
 
   let player;
   if(nodata){
-    player = {id, nick, NoData:true, Elo:null, KPR:null, APR:null, DPR:null, ADR:null, MKPR:null};
+    player = {id, nick, NoData:true, MatchesCount:0, Elo:null, KPR:null, APR:null, DPR:null, ADR:null, MKPR:null};
   }else{
     const Elo = Number(document.getElementById("add_elo").value);
     const KPR = Number(document.getElementById("add_kpr").value);
@@ -1576,6 +2019,7 @@ function addManualPlayer(){
     const DPR = Number(document.getElementById("add_dpr").value);
     const ADR = Number(document.getElementById("add_adr").value);
     const MKPR = Number(document.getElementById("add_mkpr").value);
+    const MatchesCount = Number(document.getElementById("add_matches").value);
 
     // basic validation/clamp to avoid crazy values
     player = {
@@ -1583,6 +2027,7 @@ function addManualPlayer(){
       nick,
       NoData:false,
       Elo: Math.max(0, Math.round(Elo)),
+      MatchesCount: Math.max(0, Math.round(MatchesCount)),
       KPR: clamp(KPR, 0, 3),
       APR: clamp(APR, 0, 3),
       DPR: clamp(DPR, 0, 3),
@@ -1635,8 +2080,7 @@ document.getElementById("btnRand").onclick=()=>{
   sel.value = DB.players[rint(0,DB.players.length-1)].id;
   calcAndShowPlayer();
 };
-document.getElementById("btnTeamA").onclick=()=>{ lastA=calcTeam("A"); };
-document.getElementById("btnTeamB").onclick=()=>{ lastB=calcTeam("B"); };
+for(const which of TEAM_KEYS){ const btn=document.getElementById(`btnTeam${which}`); if(btn) btn.onclick=()=>{ const res=calcTeam(which); if(which==="A") lastA=res; if(which==="B") lastB=res; }; }
 document.getElementById("btnCompare").onclick=()=>compareTeams();
 document.getElementById("btnFillRandom").onclick=()=>fillRandomTeams();
 document.getElementById("btnResetTeams").onclick=()=>resetTeams();
