@@ -34,6 +34,7 @@ main{max-width:1200px;margin:0 auto;padding:18px 16px 115px}
 .card h2{font-size:14px;margin:0 0 8px}
 .card h3{font-size:13px;margin:0 0 8px;color:rgba(232,238,246,.92)}
 .small{color:var(--muted);font-size:12.5px;line-height:1.45}
+.helpIcon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border:1px solid var(--line);border-radius:999px;font-size:11px;color:var(--muted);cursor:help;vertical-align:middle}
 .hr{height:1px;background:var(--line);margin:12px 0}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 label{font-size:12.5px;color:var(--muted)}
@@ -72,11 +73,20 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
   .chartCanvasWide{aspect-ratio:1.6/1}
 }
 
-.tableScroll{max-height:420px;overflow:auto;border:1px solid rgba(232,238,246,.10);border-radius:14px}
+.tableScroll{max-height:860px;overflow:auto;border:1px solid rgba(232,238,246,.10);border-radius:14px}
 
 .hideDetails .col-detail{display:none}
 .dbTopCard{height:360px;overflow:hidden}
 .dbTopCard .chartCanvasWide{aspect-ratio:1.8/1}
+
+.tableScroll thead th{
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: rgb(8, 13, 24);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.329);
+}
+
 </style>
 </head>
 <body>
@@ -183,22 +193,24 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
     <div class="small">
       <p style="margin:0 0 8px"><b>Risk points:</b></p>
       <ul style="margin:0 0 10px 18px;padding:0">
-        <li>NoData-игроки;</li>
+        <li>NoData-игроки (каждый даёт фиксированный риск);</li>
         <li>маленькая выборка матчей (<span class="k">MatchesCount</span>);</li>
         <li>сильные ручные корректировки;</li>
         <li>одна сыгранная пара;</li>
         <li>большой внутренний разрыв по игрокам (<span class="k">gap = max-min</span>);</li>
         <li>top-heavy структура через <span class="k">Top2Share</span>;</li>
+        <li><span class="k">gap</span> и <span class="k">Top2Share</span> считаются оба, но в итоговый риск идёт только больший вклад из двух.</li>
         <li>две star-единицы в одной команде.</li>
       </ul>
 
       <p style="margin:0 0 8px"><b>Invalid rules:</b></p>
       <ul style="margin:0 0 10px 18px;padding:0">
         <li><span class="k">2+ played pairs</span> → invalid;</li>
-        <li><span class="k">3 linked players via pairs</span> → invalid.</li>
+        <li><span class="k">3 linked players via pairs</span> → invalid;</li>
+        <li><span class="k">duplicate player in team</span> → invalid.</li>
       </ul>
 
-      <p style="margin:0 0 10px"><b>Разница между силой и риском:</b> TeamPower отвечает на вопрос “насколько команда сильна по составу”, TeamRisk — “насколько состав нестабилен/опасен для баланса”. Эти числа не смешиваются в одно.</p>
+      <p style="margin:0 0 10px"><b>Разница между силой и риском:</b> TeamPower отвечает на вопрос “насколько команда сильна по составу”, TeamRisk — “насколько состав нестабилен/опасен для баланса”. Эти числа не смешиваются в одно. Duplicate player — это invalid rule, а не risk. Gap и Top2Share считаются оба, но в TeamRisk идёт только больший из двух вкладов.</p>
     </div>
   </div>
 
@@ -234,9 +246,11 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
         <li><span class="k">gap_T1 / gap_T2</span> — пороги внутреннего разрыва по силе в команде.</li>
         <li><span class="k">Top2Share_T1 / Top2Share_T2</span> — насколько top-heavy может быть состав.</li>
         <li><span class="k">star_threshold</span> — с какого FinalPlayer игрок считается star-player.</li>
+        <li><span class="k">riskNoDataPerPlayer</span> — фиксированный риск за каждого NoData-игрока в составе.</li>
         <li><span class="k">risk_pair</span> — вес одной сыгранной пары в risk, если состав ещё не invalid.</li>
         <li><span class="k">riskTwoStars</span> — риск за 2 star-player в одной команде.</li>
-        <li><span class="k">riskNoData / riskSecondNoData / riskLowSample1 / riskLowSample2 / riskManual1 / riskManual2 / riskGap1 / riskGap2 / riskTop2_1 / riskTop2_2</span> — сами risk-веса. Их рост делает соответствующий фактор жёстче.</li>
+        <li><span class="k">riskNoDataPerPlayer / riskLowSample1 / riskLowSample2 / riskManual1 / riskManual2 / riskGap1 / riskGap2 / riskTop2_1 / riskTop2_2</span> — сами risk-веса. Их рост делает соответствующий фактор жёстче.</li>
+        <li><span class="k">gap</span> и <span class="k">Top2Share</span> меряют перекос команды с двух сторон, но в TeamRisk идёт только <span class="k">max(riskGap, riskTop2)</span>.</li>
       </ul>
     </div>
   </div>
@@ -433,22 +447,22 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       <h3>Нормализация R → 0..100</h3>
       <div class="small">Здесь настраивается базовая шкала игрока и shrinkage по объёму данных.</div>
       <div class="inline3">
-        <div class="field"><label>Rmin</label><input id="set_Rmin" type="number" step="0.00001" value="0"/></div>
-        <div class="field"><label>Rmax</label><input id="set_Rmax" type="number" step="0.01" value="2.0"/></div>
-        <div class="field"><label>R (NoData)</label><input id="set_Rnodata" type="number" step="0.01" value="1.0"/></div>
+        <div class="field"><label>Rmin <span class="helpIcon" title="Нижняя граница шкалы Rcorr перед переводом в SkillScore 0..100. Если увеличить, слабые игроки чаще будут прижиматься к нулю. Если уменьшить, нижняя часть шкалы станет мягче.">ⓘ</span></label><input id="set_Rmin" type="number" step="0.00001" value="0"/></div>
+        <div class="field"><label>Rmax <span class="helpIcon" title="Верхняя граница шкалы Rcorr перед переводом в SkillScore 0..100. Если увеличить, верхняя часть шкалы станет плотнее. Если уменьшить, сильные игроки быстрее будут упираться в потолок.">ⓘ</span></label><input id="set_Rmax" type="number" step="0.01" value="2.0"/></div>
+        <div class="field"><label>R (NoData) <span class="helpIcon" title="Базовый стартовый R для NoData-игроков до Elo-коррекции. Если увеличить, NoData-игроки в среднем станут сильнее. Если уменьшить — слабее.">ⓘ</span></label><input id="set_Rnodata" type="number" step="0.01" value="1.0"/></div>
       </div>
       <div class="inline3">
-        <div class="field"><label>R_pool</label><input id="set_Rpool" type="number" step="0.01" value="1.0"/></div>
-        <div class="field"><label>k_shrink</label><input id="set_kshrink" type="number" step="1" min="0" value="30"/></div>
+        <div class="field"><label>R_pool <span class="helpIcon" title="Среднее значение R, к которому стягиваются игроки с маленькой выборкой. Если увеличить, low-sample игроки в среднем поднимутся. Если уменьшить — опустятся.">ⓘ</span></label><input id="set_Rpool" type="number" step="0.01" value="1.0"/></div>
+        <div class="field"><label>k_shrink <span class="helpIcon" title="Сила shrinkage по числу матчей. Если увеличить, low-sample игроки сильнее тянутся к R_pool. Если уменьшить, модель быстрее доверяет их собственным statline.">ⓘ</span></label><input id="set_kshrink" type="number" step="1" min="0" value="30"/></div>
         <div></div>
       </div>
 
       <h3>Elo-коррекция (вариант B)</h3>
       <div class="small">Эти параметры меняют форму и силу поправки среды: где она наиболее чувствительна, насколько широкий переход и насколько велика амплитуда.</div>
       <div class="inline3">
-        <div class="field"><label>E0</label><input id="set_E0" type="number" step="1" value="2500"/></div>
-        <div class="field"><label>W</label><input id="set_W" type="number" step="1" value="500"/></div>
-        <div class="field"><label>BETA</label><input id="set_BETA" type="number" step="0.01" value="0.35"/></div>
+        <div class="field"><label>E0 <span class="helpIcon" title="Центр Elo-коррекции. Около этого Elo бонус/штраф близок к нулю. Если увеличить, заметный бонус начнётся позже. Если уменьшить — раньше.">ⓘ</span></label><input id="set_E0" type="number" step="1" value="2500"/></div>
+        <div class="field"><label>W <span class="helpIcon" title="Ширина перехода сигмоиды Elo-коррекции. Если увеличить, влияние Elo станет плавнее. Если уменьшить — резче.">ⓘ</span></label><input id="set_W" type="number" step="1" value="500"/></div>
+        <div class="field"><label>BETA <span class="helpIcon" title="Максимальная амплитуда Elo-коррекции в единицах R. Если увеличить, Elo сильнее влияет на рейтинг. Если уменьшить — слабее.">ⓘ</span></label><input id="set_BETA" type="number" step="0.01" value="0.35"/></div>
       </div>
 
       <div class="field">
@@ -461,55 +475,55 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       <h3>Soft / Team</h3>
       <div class="small">λ управляет смешиванием soft-skill, ND_MIN/ND_MAX — ручной поправкой NoData. Ниже — абсолютные правила валидности команд.</div>
       <div class="inline3">
-        <div class="field"><label>λ</label><input id="set_lambda" type="number" step="0.01" min="0" max="0.5" value="0.15"/></div>
+        <div class="field"><label>λ <span class="helpIcon" title="Вес soft-skill слоя в BaseMix. Если увеличить, soft-skill сильнее влияет на итог. Если уменьшить, итог ближе к чистому SkillScore.">ⓘ</span></label><input id="set_lambda" type="number" step="0.01" min="0" max="0.5" value="0.15"/></div>
         <div class="field"><label>γ (legacy, не используется)</label><input id="set_gamma" type="number" step="0.05" min="0" max="2" value="0.70" disabled/></div>
-        <div class="field"><label>ND_MIN</label><input id="set_NDmin" type="number" step="1" value="-12"/></div>
-        <div class="field"><label>ND_MAX</label><input id="set_NDmax" type="number" step="1" value="12"/></div>
+        <div class="field"><label>ND_MIN <span class="helpIcon" title="Нижняя граница ручной поправки NoDataAdj. Если расширить диапазон, эксперт сможет сильнее двигать NoData-игрока. Если сузить — коррекция станет консервативнее.">ⓘ</span></label><input id="set_NDmin" type="number" step="1" value="-12"/></div>
+        <div class="field"><label>ND_MAX <span class="helpIcon" title="Верхняя граница ручной поправки NoDataAdj. Если расширить диапазон, эксперт сможет сильнее двигать NoData-игрока. Если сузить — коррекция станет консервативнее.">ⓘ</span></label><input id="set_NDmax" type="number" step="1" value="12"/></div>
       </div>
       <div class="inline3">
-        <div class="field"><label title="Legacy compare only">T_green</label><input id="set_tgreen" type="number" step="0.1" min="0" value="1.5"/></div>
-        <div class="field"><label title="Legacy compare only">T_yellow</label><input id="set_tyellow" type="number" step="0.1" min="0" value="3.0"/></div>
+        <div class="field"><label title="Legacy compare only">T_green <span class="helpIcon" title="Параметр только для legacy compare A/B. Не определяет валидность состава, а лишь помогает визуально сравнивать команды.">ⓘ</span></label><input id="set_tgreen" type="number" step="0.1" min="0" value="1.5"/></div>
+        <div class="field"><label title="Legacy compare only">T_yellow <span class="helpIcon" title="Параметр только для legacy compare A/B. Не определяет валидность состава, а лишь помогает визуально сравнивать команды.">ⓘ</span></label><input id="set_tyellow" type="number" step="0.1" min="0" value="3.0"/></div>
         <div></div>
       </div>
       <div class="inline3">
-        <div class="field"><label>TeamPowerMin</label><input id="set_teamPowerMin" type="number" step="0.1" value="35"/></div>
-        <div class="field"><label>TeamPowerMax</label><input id="set_teamPowerMax" type="number" step="0.1" value="75"/></div>
-        <div class="field"><label>RiskCap</label><input id="set_riskCap" type="number" step="1" value="6"/></div>
+        <div class="field"><label>TeamPowerMin <span class="helpIcon" title="Нижняя граница допустимой силы команды. Если увеличить, слабые составы будут чаще невалидными. Если уменьшить — коридор расширится вниз.">ⓘ</span></label><input id="set_teamPowerMin" type="number" step="0.1" value="35"/></div>
+        <div class="field"><label>TeamPowerMax <span class="helpIcon" title="Верхняя граница допустимой силы команды. Если уменьшить, сильные составы будут чаще невалидными. Если увеличить — допустимы более мощные команды.">ⓘ</span></label><input id="set_teamPowerMax" type="number" step="0.1" value="75"/></div>
+        <div class="field"><label>RiskCap <span class="helpIcon" title="Максимально допустимый суммарный TeamRisk. Если увеличить, модель станет терпимее к рискованным составам. Если уменьшить — строже.">ⓘ</span></label><input id="set_riskCap" type="number" step="1" value="6"/></div>
       </div>
 
       <div class="hr"></div>
 
       <h3>Risk model</h3>
-      <div class="small">Сначала идут пороги распознавания риск-факторов, затем — сами веса risk points.</div>
+      <div class="small">Сначала идут пороги распознавания риск-факторов, затем — сами веса risk points. Каждый NoData-игрок даёт фиксированный риск. Gap и Top2Share не суммируются: в TeamRisk идёт только больший из двух вкладов. Важно: <span class="k">gap</span> и <span class="k">Top2Share</span> оба считаются, но в итоговый риск идёт только больший из двух вкладов, чтобы не штрафовать один и тот же перекос дважды. Каждый <span class="k">NoData</span>-игрок даёт фиксированный риск через <span class="k">riskNoDataPerPlayer</span>.</div>
       <div class="inline3">
-        <div class="field"><label>lowSample_1 (&lt;)</label><input id="set_lowSample1" type="number" step="1" value="20"/></div>
-        <div class="field"><label>lowSample_2 (&lt;)</label><input id="set_lowSample2" type="number" step="1" value="50"/></div>
-        <div class="field"><label>star_threshold</label><input id="set_starThreshold" type="number" step="0.1" value="85"/></div>
+        <div class="field"><label>lowSample_1 (&lt;) <span class="helpIcon" title="Порог очень маленькой выборки матчей. Если игрок сыграл меньше этого числа матчей, риск выше. Если увеличить порог, больше игроков будут считаться очень low-sample.">ⓘ</span></label><input id="set_lowSample1" type="number" step="1" value="20"/></div>
+        <div class="field"><label>lowSample_2 (&lt;) <span class="helpIcon" title="Второй порог low-sample риска. Игроки между lowSample_1 и lowSample_2 получают более мягкий риск. Если увеличить порог, зона low-sample расширится.">ⓘ</span></label><input id="set_lowSample2" type="number" step="1" value="50"/></div>
+        <div class="field"><label>star_threshold <span class="helpIcon" title="Порог, выше которого игрок считается star-player для risk model. Если уменьшить, звёзд станет больше. Если увеличить — меньше.">ⓘ</span></label><input id="set_starThreshold" type="number" step="0.1" value="85"/></div>
       </div>
       <div class="inline3">
-        <div class="field"><label>manualAdj_T1</label><input id="set_manualAdjT1" type="number" step="0.1" value="4"/></div>
-        <div class="field"><label>manualAdj_T2</label><input id="set_manualAdjT2" type="number" step="0.1" value="8"/></div>
-        <div class="field"><label>risk_pair</label><input id="set_riskPair" type="number" step="1" value="2"/></div>
+        <div class="field"><label>manualAdj_T1 <span class="helpIcon" title="Первый порог по |NoDataAdj|. Если эксперт сильно двинул NoData-игрока от нуля, включается первый manual-risk. Если увеличить порог, mild-risk будет реже.">ⓘ</span></label><input id="set_manualAdjT1" type="number" step="0.1" value="4"/></div>
+        <div class="field"><label>manualAdj_T2 <span class="helpIcon" title="Второй, более жёсткий порог по |NoDataAdj|. Если увеличить, тяжёлый manual-risk будет срабатывать реже. Если уменьшить — чаще.">ⓘ</span></label><input id="set_manualAdjT2" type="number" step="0.1" value="8"/></div>
+        <div class="field"><label>risk_pair <span class="helpIcon" title="Риск за одну сыгранную пару, если состав ещё не invalid. Если увеличить, модель станет строже к одной связке.">ⓘ</span></label><input id="set_riskPair" type="number" step="1" value="2"/></div>
       </div>
       <div class="inline3">
-        <div class="field"><label>gap_T1</label><input id="set_gapT1" type="number" step="0.1" value="30"/></div>
-        <div class="field"><label>gap_T2</label><input id="set_gapT2" type="number" step="0.1" value="45"/></div>
-        <div class="field"><label>2 stars risk</label><input id="set_riskTwoStars" type="number" step="1" value="3"/></div>
+        <div class="field"><label>gap_T1 <span class="helpIcon" title="Порог внутреннего разрыва по силе команды (max - min). Если уменьшить, риск за перекошенный состав будет срабатывать чаще. Если увеличить — реже.">ⓘ</span></label><input id="set_gapT1" type="number" step="0.1" value="30"/></div>
+        <div class="field"><label>gap_T2 <span class="helpIcon" title="Второй порог внутреннего разрыва по силе команды. Если уменьшить, сильный перекос будет штрафоваться чаще. Если увеличить — реже.">ⓘ</span></label><input id="set_gapT2" type="number" step="0.1" value="45"/></div>
+        <div class="field"><label>riskTwoStars <span class="helpIcon" title="Риск за двух star-player в одной команде. Если увеличить, сильные ядра из двух звёзд будут штрафоваться жёстче.">ⓘ</span></label><input id="set_riskTwoStars" type="number" step="1" value="3"/></div>
       </div>
       <div class="inline3">
-        <div class="field"><label>Top2Share_T1</label><input id="set_top2shareT1" type="number" step="0.01" value="0.55"/></div>
-        <div class="field"><label>Top2Share_T2</label><input id="set_top2shareT2" type="number" step="0.01" value="0.65"/></div>
+        <div class="field"><label>Top2Share_T1 <span class="helpIcon" title="Порог доли двух сильнейших игроков в суммарной силе команды. Если уменьшить — top-heavy составы будут флагаться чаще. Если увеличить — реже.">ⓘ</span></label><input id="set_top2shareT1" type="number" step="0.01" value="0.55"/></div>
+        <div class="field"><label>Top2Share_T2 <span class="helpIcon" title="Более жёсткий порог доли двух сильнейших игроков. Если уменьшить — сильные перекосы будут флагаться чаще. Если увеличить — реже.">ⓘ</span></label><input id="set_top2shareT2" type="number" step="0.01" value="0.65"/></div>
         <div></div>
       </div>
       <div class="inline3">
-        <div class="field"><label>riskNoData</label><input id="set_riskNoData" type="number" step="1" value="2"/></div>
-        <div class="field"><label>riskSecondNoData</label><input id="set_riskSecondNoData" type="number" step="1" value="2"/></div>
-        <div class="field"><label>riskLowSample1</label><input id="set_riskLowSample1" type="number" step="1" value="2"/></div>
+        <div class="field"><label>riskNoDataPerPlayer <span class="helpIcon" title="Риск за каждого NoData-игрока в составе. Если увеличить, команды с неизвестными игроками будут строже ограничиваться. Если уменьшить — мягче.">ⓘ</span></label><input id="set_riskNoDataPerPlayer" type="number" step="1" value="2"/></div>
+        <div class="field"><label>riskLowSample1 <span class="helpIcon" title="Вес риска для очень маленькой выборки матчей. Если увеличить, команды с очень low-sample игроками станут рискованнее. Если уменьшить — мягче.">ⓘ</span></label><input id="set_riskLowSample1" type="number" step="1" value="2"/></div>
+        <div class="field"><label>riskLowSample2 <span class="helpIcon" title="Вес более мягкого low-sample риска. Если увеличить, игроки со средней по размеру выборкой будут сильнее влиять на TeamRisk.">ⓘ</span></label><input id="set_riskLowSample2" type="number" step="1" value="1"/></div>
       </div>
       <div class="inline3">
-        <div class="field"><label>riskLowSample2</label><input id="set_riskLowSample2" type="number" step="1" value="1"/></div>
-        <div class="field"><label>riskManual1</label><input id="set_riskManual1" type="number" step="1" value="1"/></div>
-        <div class="field"><label>riskManual2</label><input id="set_riskManual2" type="number" step="1" value="2"/></div>
+        <div class="field"><label>manual risk 1 <span class="helpIcon" title="Вес риска при |NoDataAdj| ≥ manualAdj_T1. Если увеличить, ручная корректировка будет сильнее влиять на TeamRisk.">ⓘ</span></label><input id="set_riskManual1" type="number" step="1" value="1"/></div>
+        <div class="field"><label>manual risk 2 <span class="helpIcon" title="Вес риска при |NoDataAdj| ≥ manualAdj_T2. Если увеличить, крупные ручные сдвиги будут штрафоваться жёстче.">ⓘ</span></label><input id="set_riskManual2" type="number" step="1" value="2"/></div>
+        <div></div>
       </div>
       <div class="inline3">
         <div class="field"><label>riskGap1</label><input id="set_riskGap1" type="number" step="1" value="2"/></div>
@@ -528,11 +542,11 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       <h3>Aim</h3>
       <div class="small">AimAdj применяется только к NoData и задаётся линейно вокруг A0.</div>
       <div class="inline3">
-        <div class="field"><label>A_MAX</label><input id="set_Amax" type="number" step="1" value="12"/></div>
-        <div class="field"><label>A0</label><input id="set_A0" type="number" step="1" value="60"/></div>
+        <div class="field"><label>A_MAX <span class="helpIcon" title="Максимальная амплитуда AimAdj. Если увеличить, aim-тест сильнее двигает NoData-игроков. Если уменьшить — осторожнее.">ⓘ</span></label><input id="set_Amax" type="number" step="1" value="12"/></div>
+        <div class="field"><label>A0 <span class="helpIcon" title="Центр шкалы aim-теста. От этой точки считается aim-бонус или штраф для NoData-игрока. Если поднять, положительный aim-бонус станет труднее получить. Если опустить — легче.">ⓘ</span></label><input id="set_A0" type="number" step="1" value="60"/></div>
 </div>
       <div class="inline3">
-        <div class="field"><label>A_MAX_RAW</label><input id="set_Amaxraw" type="number" step="1" value="120"/></div>
+        <div class="field"><label>A_MAX_RAW <span class="helpIcon" title="Максимум сырой шкалы aim-теста. Нужен для нормализации результата теста. Менять только если меняется сама методика aim-теста.">ⓘ</span></label><input id="set_Amaxraw" type="number" step="1" value="120"/></div>
         <div class="field"><div class="small">AimAdj линейно вокруг A0.</div></div>
         <div></div>
       </div>
@@ -564,44 +578,17 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 
       <div class="hr"></div>
 
-<div class="card">
-    <h2>Калибровка модели</h2>
-    <div class="small">
-      <p style="margin:0 0 10px"><b>Калибровка игрока</b></p>
-      <ul style="margin:0 0 10px 18px;padding:0">
-        <li><span class="k">Rmin / Rmax</span> — диапазон перевода Rcorr в 0..100. ↑Rmax / ↓Rmin сжимает шкалу, ↓Rmax / ↑Rmin делает её резче.</li>
-        <li><span class="k">R_pool</span> — базовый центр shrinkage. Если увеличить, low-sample игроки в среднем поднимутся.</li>
-        <li><span class="k">k_shrink</span> — сила shrinkage. ↑ делает low-sample игроков ближе к R_pool, ↓ быстрее отпускает к их R_raw.</li>
-        <li><span class="k">E0</span> — центр самой чувствительной зоны Elo-коррекции. ↑ смещает “основную битву среды” вправо.</li>
-        <li><span class="k">W</span> — ширина перехода Elo-коррекции. ↑ делает переход более плавным, ↓ делает его резче.</li>
-        <li><span class="k">BETA</span> — амплитуда Elo-коррекции. ↑ усиливает наказание слабой среды и награду сильной.</li>
-        <li><span class="k">λ</span> — сила смешивания SoftSkill. ↑ усиливает soft-слой, ↓ делает итог ближе к чистому SkillScore.</li>
-        <li><span class="k">A0 / A_MAX_RAW / A_MAX</span> — центр Aim-теста, его raw-диапазон и максимум бонуса/штрафа.</li>
-        <li><span class="k">ND_MIN / ND_MAX</span> — ручной коридор для NoDataAdj.</li>
-        <li><span class="k">R_NODATA</span> — базовый raw prior для NoData до Elo-коррекции.</li>
-      </ul>
 
-      <p style="margin:0 0 10px"><b>Калибровка команды</b></p>
-      <ul style="margin:0 0 10px 18px;padding:0">
-        <li><span class="k">TeamPowerMin / TeamPowerMax</span> — абсолютный коридор допустимой силы команды. Сужение коридора делает правила строже.</li>
-        <li><span class="k">RiskCap</span> — верхний предел суммарного риска. ↓ делает модель осторожнее, ↑ позволяет больше нестабильных составов.</li>
-      </ul>
+      <details>
+        <summary>Как калибровать модель — подробнее</summary>
+        <div class="small" style="margin-top:8px">
+          <p><b>Игрок:</b> Rmin/Rmax контролируют перевод в 0..100. R_pool и k_shrink контролируют, насколько игроки с маленькой выборкой тянутся к среднему. E0/W/BETA управляют Elo-коррекцией. λ управляет силой soft-skill. A0/A_MAX_RAW/A_MAX — Aim-тестом. ND_MIN/ND_MAX — ручной поправкой для NoData. R_NODATA — стартовой точкой NoData до Elo-коррекции.</p>
+          <p><b>Команда:</b> TeamPowerMin/TeamPowerMax определяют абсолютный коридор силы. RiskCap задаёт максимум суммарного риска.</p>
+          <p><b>Risk model:</b> lowSample-пороги задают, кого считаем маленькой выборкой; manualAdj-пороги — когда ручная корректировка становится риск-фактором; gap-пороги — когда состав слишком неровный; Top2Share — когда команда становится top-heavy; star_threshold — когда игрок считается “star”. Все risk weights ниже контролируют, сколько баллов даёт соответствующий фактор.</p>
+        </div>
+      </details>
 
-      <p style="margin:0 0 10px"><b>Калибровка risk model</b></p>
-      <ul style="margin:0 0 10px 18px;padding:0">
-        <li><span class="k">lowSample_1 / lowSample_2</span> — пороги для low-sample риска. ↑ расширяет зону игроков, которых считаем низкой выборкой.</li>
-        <li><span class="k">manualAdj_T1 / manualAdj_T2</span> — пороги крупных ручных корректировок.</li>
-        <li><span class="k">gap_T1 / gap_T2</span> — пороги внутреннего разрыва по силе в команде.</li>
-        <li><span class="k">Top2Share_T1 / Top2Share_T2</span> — насколько top-heavy может быть состав.</li>
-        <li><span class="k">star_threshold</span> — с какого FinalPlayer игрок считается star-player.</li>
-        <li><span class="k">risk_pair</span> — вес одной сыгранной пары в risk, если состав ещё не invalid.</li>
-        <li><span class="k">riskTwoStars</span> — риск за 2 star-player в одной команде.</li>
-        <li><span class="k">riskNoData / riskSecondNoData / riskLowSample1 / riskLowSample2 / riskManual1 / riskManual2 / riskGap1 / riskGap2 / riskTop2_1 / riskTop2_2</span> — сами risk-веса. Их рост делает соответствующий фактор жёстче.</li>
-      </ul>
     </div>
-  </div>
-
-
   </div>
 </section>
 
@@ -621,11 +608,11 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
           <h3>Ключевые настройки (быстро)</h3>
           <div class="small">E0/W/BETA/Rmin/Rmax — применяются ко всем расчётам.</div>
           <div class="inline">
-            <div class="field"><label>E0</label><input id="db_E0" type="number" step="1"/></div>
-            <div class="field"><label>W</label><input id="db_W" type="number" step="1"/></div>
-            <div class="field"><label>BETA</label><input id="db_BETA" type="number" step="0.01"/></div>
-            <div class="field"><label>Rmin</label><input id="db_Rmin" type="number" step="0.001"/></div>
-            <div class="field"><label>Rmax</label><input id="db_Rmax" type="number" step="0.001"/></div>
+            <div class="field"><label>E0 <span class="helpIcon" title="Центр Elo-коррекции. Около этого Elo бонус/штраф близок к нулю. Если увеличить, заметный бонус начнётся позже. Если уменьшить — раньше.">ⓘ</span></label><input id="db_E0" type="number" step="1"/></div>
+            <div class="field"><label>W <span class="helpIcon" title="Ширина перехода сигмоиды Elo-коррекции. Если увеличить, влияние Elo станет плавнее. Если уменьшить — резче.">ⓘ</span></label><input id="db_W" type="number" step="1"/></div>
+            <div class="field"><label>BETA <span class="helpIcon" title="Максимальная амплитуда Elo-коррекции в единицах R. Если увеличить, Elo сильнее влияет на рейтинг. Если уменьшить — слабее.">ⓘ</span></label><input id="db_BETA" type="number" step="0.01"/></div>
+            <div class="field"><label>Rmin <span class="helpIcon" title="Нижняя граница шкалы Rcorr перед переводом в SkillScore 0..100. Если увеличить, слабые игроки чаще будут прижиматься к нулю. Если уменьшить, нижняя часть шкалы станет мягче.">ⓘ</span></label><input id="db_Rmin" type="number" step="0.001"/></div>
+            <div class="field"><label>Rmax <span class="helpIcon" title="Верхняя граница шкалы Rcorr перед переводом в SkillScore 0..100. Если увеличить, верхняя часть шкалы станет плотнее. Если уменьшить, сильные игроки быстрее будут упираться в потолок.">ⓘ</span></label><input id="db_Rmax" type="number" step="0.001"/></div>
           </div>
           <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
             <button class="btn good" id="btnApplyCfgFromDB">Применить</button>
@@ -969,8 +956,7 @@ function readCfg(){
     top2shareT1: clamp(getNum("set_top2shareT1", 0.55), 0, 1),
     top2shareT2: clamp(getNum("set_top2shareT2", 0.65), 0, 1),
 
-    riskNoData: Math.max(0, getNum("set_riskNoData", 2)),
-    riskSecondNoData: Math.max(0, getNum("set_riskSecondNoData", 2)),
+    riskNoDataPerPlayer: Math.max(0, getNum("set_riskNoDataPerPlayer", 2)),
     riskLowSample1: Math.max(0, getNum("set_riskLowSample1", 2)),
     riskLowSample2: Math.max(0, getNum("set_riskLowSample2", 1)),
     riskManual1: Math.max(0, getNum("set_riskManual1", 1)),
@@ -1225,10 +1211,16 @@ function updateCalcVisibility(){
 
 
 function fillDbQuickFromCfg(){
-  const map = {db_E0:"E0", db_W:"W", db_BETA:"BETA", db_Rmin:"Rmin", db_Rmax:"Rmax"};
-  for(const id in map){
-    const el = document.getElementById(id);
-    if(el && CFG) el.value = CFG[map[id]];
+  const map = {
+    E0:"db_E0",
+    W:"db_W",
+    BETA:"db_BETA",
+    Rmin:"db_Rmin",
+    Rmax:"db_Rmax"
+  };
+  for(const key in map){
+    const el = document.getElementById(map[key]);
+    if(el && CFG) el.value = CFG[key];
   }
 }
 
@@ -1293,6 +1285,13 @@ function refreshAllDbDependentUI(){
   }
 }
 function renderTeams(){
+  const selectedAll = new Set();
+  for(const key of TEAM_KEYS){
+    for(const pid of team[key]){
+      if(pid) selectedAll.add(pid);
+    }
+  }
+
   for(const which of TEAM_KEYS){
     const root=document.getElementById(`team${which}`);
     if(!root) continue;
@@ -1320,7 +1319,10 @@ function renderTeams(){
       const opt0=document.createElement("option");
       opt0.value=""; opt0.textContent="— пусто —";
       sel.appendChild(opt0);
+
       DB.players.forEach(p=>{
+        const takenElsewhere = selectedAll.has(p.id) && pid !== p.id;
+        if(takenElsewhere) return;
         const opt=document.createElement("option");
         opt.value=p.id;
         opt.textContent = `${p.nick} (${p.id})` + (p.NoData ? " — NoData" : ` — Elo ${p.Elo}`);
@@ -1329,20 +1331,20 @@ function renderTeams(){
       });
 
       sel.onchange = (e)=>{
-        const which=e.target.dataset.team;
+        const teamKey=e.target.dataset.team;
         const idx=Number(e.target.dataset.idx);
-        team[which][idx] = e.target.value || null;
+        team[teamKey][idx] = e.target.value || null;
         let f=50;
-        if(team[which][idx]){
-          const pl = playerById(team[which][idx]);
+        if(team[teamKey][idx]){
+          const pl = playerById(team[teamKey][idx]);
           if(pl){ f = calcForTable(pl).Final; }
         }
-        team[`finals${which}`][idx]=f;
-        document.getElementById(`${which}final${idx}`).textContent = round(f,1);
-        const out = document.getElementById(`team${which}Out`);
+        team[`finals${teamKey}`][idx]=f;
+        const finEl = document.getElementById(`${teamKey}final${idx}`);
+        if(finEl) finEl.textContent = round(f,1);
+        const out = document.getElementById(`team${teamKey}Out`);
         if(out) out.innerHTML = "";
-        document.getElementById("compareOut").innerHTML = "";
-        delete teamResults[which];
+        renderTeams();
         updateTeamsSummary();
       };
     }
@@ -1403,8 +1405,11 @@ function teamRisk(teamIds, cfg, synergy){
   let risk = 0;
 
   const noDataCount = infos.filter(x => x.mk.isNoData).length;
-  if(noDataCount >= 1){ risk += cfg.riskNoData; riskReasons.push(`NoData players: +${cfg.riskNoData}`); }
-  if(noDataCount >= 2){ risk += cfg.riskSecondNoData; riskReasons.push(`second NoData: +${cfg.riskSecondNoData}`); }
+  if(noDataCount > 0){
+    const add = noDataCount * cfg.riskNoDataPerPlayer;
+    risk += add;
+    riskReasons.push(`NoData players (${noDataCount} x ${cfg.riskNoDataPerPlayer}): +${add}`);
+  }
 
   for(const x of infos){
     if(x.mk.isNoData) continue;
@@ -1427,20 +1432,30 @@ function teamRisk(teamIds, cfg, synergy){
   const maxF = finals.length ? Math.max(...finals) : 0;
   const minF = finals.length ? Math.min(...finals) : 0;
   const gap = maxF - minF;
-  if(gap >= cfg.gapT2){ risk += cfg.riskGap2; riskReasons.push(`gap ≥ ${cfg.gapT2} (+${cfg.riskGap2})`); }
-  else if(gap >= cfg.gapT1){ risk += cfg.riskGap1; riskReasons.push(`gap ≥ ${cfg.gapT1} (+${cfg.riskGap1})`); }
+
+  let riskGap = 0;
+  if(gap >= cfg.gapT2) riskGap = cfg.riskGap2;
+  else if(gap >= cfg.gapT1) riskGap = cfg.riskGap1;
 
   const sorted = finals.slice().sort((a,b)=>b-a);
   const sum = finals.reduce((a,b)=>a+b,0);
   const top2 = (sorted[0]||0) + (sorted[1]||0);
   const top2Share = sum > 0 ? top2 / sum : 0;
-  if(top2Share >= cfg.top2shareT2){ risk += cfg.riskTop2_2; riskReasons.push(`Top2Share ≥ ${cfg.top2shareT2} (+${cfg.riskTop2_2})`); }
-  else if(top2Share >= cfg.top2shareT1){ risk += cfg.riskTop2_1; riskReasons.push(`Top2Share ≥ ${cfg.top2shareT1} (+${cfg.riskTop2_1})`); }
+
+  let riskTop2 = 0;
+  if(top2Share >= cfg.top2shareT2) riskTop2 = cfg.riskTop2_2;
+  else if(top2Share >= cfg.top2shareT1) riskTop2 = cfg.riskTop2_1;
+
+  const imbalanceRisk = Math.max(riskGap, riskTop2);
+  if(imbalanceRisk > 0){
+    risk += imbalanceRisk;
+    riskReasons.push(`imbalance risk: max(gap=+${riskGap}, Top2Share=+${riskTop2}) => +${imbalanceRisk}`);
+  }
 
   const starCount = infos.filter(x => x.mk.isStarPlayer).length;
   if(starCount >= 2){ risk += cfg.riskTwoStars; riskReasons.push(`2 star players (+${cfg.riskTwoStars})`); }
 
-  return {risk, reasons:riskReasons, gap, top2Share, starCount, noDataCount};
+  return {risk, reasons:riskReasons, gap, top2Share, starCount, noDataCount, riskGap, riskTop2, imbalanceRisk};
 }
 
 function calcTeam(which){
@@ -1455,14 +1470,23 @@ function calcTeam(which){
   const synergy = analyzeTeamSynergy(ids);
   const risk = teamRisk(ids, CFG, synergy);
 
-  if(synergy.involved.size){
+  const seenIds = new Set();
+  const duplicateIds = new Set();
+  for(const id of ids.filter(Boolean)){
+    if(seenIds.has(id)) duplicateIds.add(id);
+    seenIds.add(id);
+  }
+
+  const highlightSet = new Set([...synergy.involved, ...duplicateIds]);
+  if(highlightSet.size){
     root.querySelectorAll("select.slotSel").forEach((s, idx)=>{
       const pid = team[which][idx];
-      if(pid && synergy.involved.has(pid)) s.classList.add("badline");
+      if(pid && highlightSet.has(pid)) s.classList.add("badline");
     });
   }
 
   const reasons = [];
+  if(duplicateIds.size > 0) reasons.push("duplicate player in team");
   if(synergy.invalid) reasons.push(...synergy.reasons);
   if(power.power < CFG.TeamPowerMin || power.power > CFG.TeamPowerMax){
     reasons.push(`TeamPower outside corridor [${CFG.TeamPowerMin}..${CFG.TeamPowerMax}]`);
@@ -1488,10 +1512,7 @@ function calcTeam(which){
       ${riskHtml ? `<details style="margin-top:8px"><summary>Risk details</summary><ul class="small" style="margin:8px 0 0 18px;padding:0">${riskHtml}</ul></details>` : ""}
     </div>
   `;
-  const result = {...power, valid, invalidReasons: reasons, TeamPower: power.power, TeamRisk: risk.risk, riskDetails:risk.reasons, synergyInvalid: synergy.invalid, synergyReasons: synergy.reasons, synergyPairCount: synergy.pairCount, synergyThreeLinked: synergy.hasThreeLinked};
-  teamResults[which] = result;
-  updateTeamsSummary();
-  return result;
+  return {...power, valid, invalidReasons: reasons, TeamPower: power.power, TeamRisk: risk.risk, riskDetails:risk.reasons, synergyInvalid: synergy.invalid, synergyReasons: synergy.reasons, synergyPairCount: synergy.pairCount, synergyThreeLinked: synergy.hasThreeLinked, duplicateIds:[...duplicateIds]};
 }
 let lastA=null; let lastB=null; let teamResults={};
 
@@ -1967,6 +1988,7 @@ document.getElementById("fileImportCfg").addEventListener("change", async (ev)=>
     // apply known keys
     const map = {E0:"set_E0", W:"set_W", BETA:"set_BETA", Rmin:"set_Rmin", Rmax:"set_Rmax", R_pool:"set_Rpool", k_shrink:"set_kshrink", lambda:"set_lambda", R_NODATA:"set_Rnodata", ptsN:"set_ptsN", histBin:"set_histBin", gamma:"set_gamma", T_green:"set_tgreen", T_yellow:"set_tyellow", ND_MIN:"set_NDmin", ND_MAX:"set_NDmax", A0:"set_A0", A_MAX:"set_Amax", A_MAX_RAW:"set_Amaxraw", TeamPowerMin:"set_teamPowerMin", TeamPowerMax:"set_teamPowerMax", RiskCap:"set_riskCap", lowSample1:"set_lowSample1", lowSample2:"set_lowSample2", starThreshold:"set_starThreshold", manualAdjT1:"set_manualAdjT1", manualAdjT2:"set_manualAdjT2", riskPair:"set_riskPair", gapT1:"set_gapT1", gapT2:"set_gapT2", riskTwoStars:"set_riskTwoStars", top2shareT1:"set_top2shareT1", top2shareT2:"set_top2shareT2", riskNoData:"set_riskNoData", riskSecondNoData:"set_riskSecondNoData", riskLowSample1:"set_riskLowSample1", riskLowSample2:"set_riskLowSample2", riskManual1:"set_riskManual1", riskManual2:"set_riskManual2", riskGap1:"set_riskGap1", riskGap2:"set_riskGap2", riskTop2_1:"set_riskTop2_1", riskTop2_2:"set_riskTop2_2"};
     for(const k in map){ if(obj[k]!=null){ const el=document.getElementById(map[k]); if(el) el.value=obj[k]; } }
+    if(obj.riskNoDataPerPlayer==null && obj.riskNoData!=null){ const el=document.getElementById("set_riskNoDataPerPlayer"); if(el) el.value=obj.riskNoData; }
     applyCfg();
   }catch(e){ console.log(e); }
   finally{ ev.target.value=""; }
