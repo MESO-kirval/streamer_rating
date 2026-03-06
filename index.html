@@ -1781,7 +1781,7 @@ function drawDbMiniChart(cfg){
       const row=calcForTable(p);
       const x = Number.isFinite(p.Elo) ? p.Elo : 1150;
       const y = row.Rcorr;
-      pts.push({x, y, label:p.nick||p.id});
+      pts.push({x, y});
     });
     if(pts.length) lines.push({data:pts,color:"rgba(255,255,255,.85)",pointOnly:true});
   }
