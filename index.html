@@ -85,7 +85,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
     <button class="tabbtn" id="tab-doc" role="tab" aria-controls="panel-doc" aria-selected="true">One-pager</button>
     <button class="tabbtn" id="tab-calc" role="tab" aria-controls="panel-calc" aria-selected="false">Калькулятор</button>
     <button class="tabbtn" id="tab-settings" role="tab" aria-controls="panel-settings" aria-selected="false">Настройки</button>
-      <button class="tabbtn" id="tab-db" role="tab" aria-controls="panel-db" aria-selected="false">БД</button>
+      <button class="tabbtn" id="tab-db" role="tab" aria-controls="panel-db" aria-selected="false">База Данных</button>
 </div>
 </header>
 
@@ -365,9 +365,9 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 
       <div class="field">
         <label>PointsN (точек на графике 3)</label>
-        <input id="set_ptsN" type="number" value="5" step="1" min="0"/>
+        <input id="set_ptsN" type="number" value="20" step="1" min="0"/>
         <div class="small">Сколько игроков из БД рисуем точками на графике Rcorr(Elo) (0 = без точек).</div>
-        <div class="field"><label>HistBin (шаг гистограммы)</label><input id="set_histBin" type="number" min="1" step="1" value="10"/></div>
+        <div class="field"><label>HistBin (шаг гистограммы)</label><input id="set_histBin" type="number" min="1" step="1" value="5"/></div>
       </div>
 
       <h3>Soft / Team</h3>
