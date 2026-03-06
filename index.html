@@ -579,14 +579,42 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       <div class="hr"></div>
 
 
-      <details>
-        <summary>Как калибровать модель — подробнее</summary>
-        <div class="small" style="margin-top:8px">
-          <p><b>Игрок:</b> Rmin/Rmax контролируют перевод в 0..100. R_pool и k_shrink контролируют, насколько игроки с маленькой выборкой тянутся к среднему. E0/W/BETA управляют Elo-коррекцией. λ управляет силой soft-skill. A0/A_MAX_RAW/A_MAX — Aim-тестом. ND_MIN/ND_MAX — ручной поправкой для NoData. R_NODATA — стартовой точкой NoData до Elo-коррекции.</p>
-          <p><b>Команда:</b> TeamPowerMin/TeamPowerMax определяют абсолютный коридор силы. RiskCap задаёт максимум суммарного риска.</p>
-          <p><b>Risk model:</b> lowSample-пороги задают, кого считаем маленькой выборкой; manualAdj-пороги — когда ручная корректировка становится риск-фактором; gap-пороги — когда состав слишком неровный; Top2Share — когда команда становится top-heavy; star_threshold — когда игрок считается “star”. Все risk weights ниже контролируют, сколько баллов даёт соответствующий фактор.</p>
-        </div>
-      </details>
+      <div class="card">
+    <h2>Калибровка модели</h2>
+    <div class="small">
+      <p style="margin:0 0 10px"><b>Калибровка игрока</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">Rmin / Rmax</span> — диапазон перевода Rcorr в 0..100. ↑Rmax / ↓Rmin сжимает шкалу, ↓Rmax / ↑Rmin делает её резче.</li>
+        <li><span class="k">R_pool</span> — базовый центр shrinkage. Если увеличить, low-sample игроки в среднем поднимутся.</li>
+        <li><span class="k">k_shrink</span> — сила shrinkage. ↑ делает low-sample игроков ближе к R_pool, ↓ быстрее отпускает к их R_raw.</li>
+        <li><span class="k">E0</span> — центр самой чувствительной зоны Elo-коррекции. ↑ смещает “основную битву среды” вправо.</li>
+        <li><span class="k">W</span> — ширина перехода Elo-коррекции. ↑ делает переход более плавным, ↓ делает его резче.</li>
+        <li><span class="k">BETA</span> — амплитуда Elo-коррекции. ↑ усиливает наказание слабой среды и награду сильной.</li>
+        <li><span class="k">λ</span> — сила смешивания SoftSkill. ↑ усиливает soft-слой, ↓ делает итог ближе к чистому SkillScore.</li>
+        <li><span class="k">A0 / A_MAX_RAW / A_MAX</span> — центр Aim-теста, его raw-диапазон и максимум бонуса/штрафа.</li>
+        <li><span class="k">ND_MIN / ND_MAX</span> — ручной коридор для NoDataAdj.</li>
+        <li><span class="k">R_NODATA</span> — базовый raw prior для NoData до Elo-коррекции.</li>
+      </ul>
+
+      <p style="margin:0 0 10px"><b>Калибровка команды</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">TeamPowerMin / TeamPowerMax</span> — абсолютный коридор допустимой силы команды. Сужение коридора делает правила строже.</li>
+        <li><span class="k">RiskCap</span> — верхний предел суммарного риска. ↓ делает модель осторожнее, ↑ позволяет больше нестабильных составов.</li>
+      </ul>
+
+      <p style="margin:0 0 10px"><b>Калибровка risk model</b></p>
+      <ul style="margin:0 0 10px 18px;padding:0">
+        <li><span class="k">lowSample_1 / lowSample_2</span> — пороги для low-sample риска. ↑ расширяет зону игроков, которых считаем низкой выборкой.</li>
+        <li><span class="k">manualAdj_T1 / manualAdj_T2</span> — пороги крупных ручных корректировок.</li>
+        <li><span class="k">gap_T1 / gap_T2</span> — пороги внутреннего разрыва по силе в команде.</li>
+        <li><span class="k">Top2Share_T1 / Top2Share_T2</span> — насколько top-heavy может быть состав.</li>
+        <li><span class="k">star_threshold</span> — с какого FinalPlayer игрок считается star-player.</li>
+        <li><span class="k">risk_pair</span> — вес одной сыгранной пары в risk, если состав ещё не invalid.</li>
+        <li><span class="k">riskTwoStars</span> — риск за 2 star-player в одной команде.</li>
+        <li><span class="k">riskNoData / riskSecondNoData / riskLowSample1 / riskLowSample2 / riskManual1 / riskManual2 / riskGap1 / riskGap2 / riskTop2_1 / riskTop2_2</span> — сами risk-веса. Их рост делает соответствующий фактор жёстче.</li>
+      </ul>
+    </div>
+  </div>
 
     </div>
   </div>
@@ -2102,7 +2130,7 @@ document.getElementById("btnRand").onclick=()=>{
   sel.value = DB.players[rint(0,DB.players.length-1)].id;
   calcAndShowPlayer();
 };
-for(const which of TEAM_KEYS){ const btn=document.getElementById(`btnTeam${which}`); if(btn) btn.onclick=()=>{ const res=calcTeam(which); if(which==="A") lastA=res; if(which==="B") lastB=res; }; }
+for(const which of TEAM_KEYS){ const btn=document.getElementById(`btnTeam${which}`); if(btn) btn.onclick=()=>{ const res=calcTeam(which); teamResults[which]=res; if(which==="A") lastA=res; if(which==="B") lastB=res; updateTeamsSummary(); }; }
 document.getElementById("btnCompare").onclick=()=>compareTeams();
 document.getElementById("btnFillRandom").onclick=()=>fillRandomTeams();
 document.getElementById("btnResetTeams").onclick=()=>resetTeams();
