@@ -80,6 +80,9 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 .dbTopCard .chartCanvasWide{aspect-ratio:1.8/1}
 
 
+
+.dbScatterOnly,.dbDistributionOnly{transition:opacity .12s ease}
+
 .canvasHoverTip{
   position:fixed;
   z-index:9999;
@@ -727,7 +730,7 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
       <div class="hr"></div>
       
       
-      <details id="dbHistWrap" style="margin-top:12px">
+      <details id="dbHistWrap" style="margin-top:12px;display:none">
         <summary>Распределение игроков (FinalPlayer)</summary>
         <div class="small" style="margin-top:8px">Гистограмма FinalPlayer (0..100). Шаг берётся из настройки <span class="k">HistBin</span>.</div>
         <canvas id="dbHistChart" class="chartCanvasWide" style="max-height:220px;margin-top:8px"></canvas>
@@ -740,14 +743,24 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
         <div class="card" style="margin-top:10px">
           <div class="inline3">
             <div class="field">
+              <label>Chart mode</label>
+              <select id="dbChartMode">
+                <option value="scatter" selected>Scatter</option>
+                <option value="distribution">Distribution</option>
+              </select>
+            </div>
+            <div class="field dbScatterOnly">
               <label>X axis</label>
               <select id="dbScatterX"></select>
             </div>
-            <div class="field">
+            <div class="field dbScatterOnly">
               <label>Y axis</label>
               <select id="dbScatterY"></select>
             </div>
-            <div class="field">
+          </div>
+
+          <div class="inline3">
+            <div class="field dbScatterOnly">
               <label>Line mode</label>
               <select id="dbScatterLine">
                 <option value="binned" selected>Binned average</option>
@@ -756,9 +769,13 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
                 <option value="none">None</option>
               </select>
             </div>
-          </div>
-
-          <div class="inline3">
+            <div class="field dbScatterOnly">
+              <label>Color mode</label>
+              <select id="dbScatterColorMode">
+                <option value="single" selected>Single color</option>
+                <option value="highlightNoData">Highlight NoData</option>
+              </select>
+            </div>
             <div class="field">
               <label>Filter</label>
               <select id="dbScatterFilter">
@@ -767,10 +784,29 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
                 <option value="nodata">NoData only</option>
               </select>
             </div>
+          </div>
+
+          <div class="inline3">
+            <div class="field dbDistributionOnly" style="display:none">
+              <label>Metric</label>
+              <select id="dbDistMetric"></select>
+            </div>
+            <div class="field dbDistributionOnly" style="display:none">
+              <label>Group mode</label>
+              <select id="dbDistGroupMode">
+                <option value="all" selected>All combined</option>
+                <option value="split">Faceit vs NoData</option>
+              </select>
+            </div>
             <div class="field">
               <label>Bins count</label>
               <input id="dbScatterBins" type="number" min="4" max="50" step="1" value="14"/>
             </div>
+          </div>
+
+          <div class="inline3">
+            <div></div>
+            <div></div>
             <div class="field" style="align-self:end">
               <button class="btn" id="btnDbScatterReset">Reset view</button>
             </div>
@@ -2062,19 +2098,25 @@ const DB_SCATTER_FIELDS = {
 };
 
 const dbScatterState = {
+  chartMode: "scatter",
   xKey: "Elo",
   yKey: "Rcorr",
+  distMetric: "FinalPlayer",
   filter: "all",
   lineMode: "binned",
+  colorMode: "single",
+  groupMode: "all",
   bins: 14,
   baseView: null,
   view: null,
   drag: null,
+  signature: null,
 };
 
 function initDbScatterControls(){
   const xSel = document.getElementById("dbScatterX");
   const ySel = document.getElementById("dbScatterY");
+  const metricSel = document.getElementById("dbDistMetric");
   if(!xSel || !ySel || xSel.dataset.ready === "1") return;
 
   const entries = Object.entries(DB_SCATTER_FIELDS);
@@ -2088,19 +2130,44 @@ function initDbScatterControls(){
     oy.value = key; oy.textContent = def.label;
     if(key === dbScatterState.yKey) oy.selected = true;
     ySel.appendChild(oy);
+
+    if(metricSel){
+      const om = document.createElement("option");
+      om.value = key; om.textContent = def.label;
+      if(key === dbScatterState.distMetric) om.selected = true;
+      metricSel.appendChild(om);
+    }
   }
 
+  const modeSel = document.getElementById("dbChartMode");
   const lineSel = document.getElementById("dbScatterLine");
+  const colorSel = document.getElementById("dbScatterColorMode");
   const filterSel = document.getElementById("dbScatterFilter");
   const binsEl = document.getElementById("dbScatterBins");
+  const groupSel = document.getElementById("dbDistGroupMode");
   const resetBtn = document.getElementById("btnDbScatterReset");
 
+  function syncScatterUiVisibility(){
+    const mode = modeSel?.value || "scatter";
+    document.querySelectorAll(".dbScatterOnly").forEach(el=>{ el.style.display = mode === "scatter" ? "" : "none"; });
+    document.querySelectorAll(".dbDistributionOnly").forEach(el=>{ el.style.display = mode === "distribution" ? "" : "none"; });
+  }
+
+  if(modeSel) modeSel.onchange = ()=>{ dbScatterState.chartMode = modeSel.value; syncScatterUiVisibility(); drawDbScatterExplorer(CFG, true); };
   xSel.onchange = ()=>{ dbScatterState.xKey = xSel.value; drawDbScatterExplorer(CFG, true); };
   ySel.onchange = ()=>{ dbScatterState.yKey = ySel.value; drawDbScatterExplorer(CFG, true); };
+  if(metricSel) metricSel.onchange = ()=>{ dbScatterState.distMetric = metricSel.value; drawDbScatterExplorer(CFG, true); };
   if(lineSel) lineSel.onchange = ()=>{ dbScatterState.lineMode = lineSel.value; drawDbScatterExplorer(CFG, false); };
+  if(colorSel) colorSel.onchange = ()=>{ dbScatterState.colorMode = colorSel.value; drawDbScatterExplorer(CFG, false); };
   if(filterSel) filterSel.onchange = ()=>{ dbScatterState.filter = filterSel.value; drawDbScatterExplorer(CFG, true); };
+  if(groupSel) groupSel.onchange = ()=>{ dbScatterState.groupMode = groupSel.value; drawDbScatterExplorer(CFG, true); };
   if(binsEl) binsEl.onchange = ()=>{ dbScatterState.bins = Math.max(4, Math.min(50, parseInt(binsEl.value||14,10)||14)); binsEl.value = String(dbScatterState.bins); drawDbScatterExplorer(CFG, false); };
   if(resetBtn) resetBtn.onclick = ()=>resetDbScatterView();
+
+  dbScatterState.chartMode = modeSel?.value || "scatter";
+  dbScatterState.colorMode = colorSel?.value || "single";
+  dbScatterState.groupMode = groupSel?.value || "all";
+  syncScatterUiVisibility();
 
   xSel.dataset.ready = "1";
   initDbScatterCanvasInteractions();
@@ -2109,13 +2176,16 @@ function initDbScatterControls(){
 function getDbScatterDataset(cfg){
   const xKey = document.getElementById("dbScatterX")?.value || dbScatterState.xKey || "Elo";
   const yKey = document.getElementById("dbScatterY")?.value || dbScatterState.yKey || "Rcorr";
+  const metricKey = document.getElementById("dbDistMetric")?.value || dbScatterState.distMetric || "FinalPlayer";
   const filter = document.getElementById("dbScatterFilter")?.value || dbScatterState.filter || "all";
   dbScatterState.xKey = xKey;
   dbScatterState.yKey = yKey;
+  dbScatterState.distMetric = metricKey;
   dbScatterState.filter = filter;
 
   const xDef = DB_SCATTER_FIELDS[xKey];
   const yDef = DB_SCATTER_FIELDS[yKey];
+  const mDef = DB_SCATTER_FIELDS[metricKey];
   const pts = [];
 
   for(const p of DB.players){
@@ -2124,10 +2194,11 @@ function getDbScatterDataset(cfg){
     const row = calcForTable(p);
     const xv = xDef ? xDef.get(p, row) : null;
     const yv = yDef ? yDef.get(p, row) : null;
-    if(!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
+    const mv = mDef ? mDef.get(p, row) : null;
     pts.push({
-      x: Number(xv),
-      y: Number(yv),
+      x: Number.isFinite(xv) ? Number(xv) : null,
+      y: Number.isFinite(yv) ? Number(yv) : null,
+      m: Number.isFinite(mv) ? Number(mv) : null,
       id: p.id,
       nick: p.nick || p.id,
       Elo: Number.isFinite(Number(p.Elo)) ? Number(p.Elo) : 1150,
@@ -2135,7 +2206,7 @@ function getDbScatterDataset(cfg){
       NoData: !!p.NoData
     });
   }
-  return {points: pts, xKey, yKey};
+  return {points: pts, xKey, yKey, metricKey};
 }
 
 function getScatterRanges(points){
@@ -2220,6 +2291,49 @@ function getTheoreticalLines(xKey, yKey, cfg, rangeX){
   return {lines:[], note:"Theoretical line is available only for supported axis pairs"};
 }
 
+
+function buildDistributionSeries(points, binsCount, groupMode){
+  const valid = points.filter(p=>Number.isFinite(p.m));
+  if(!valid.length) return {series:[], range:{xmin:0,xmax:1,ymin:0,ymax:1}};
+  const xs = valid.map(p=>p.m);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const span = Math.max(1e-9, xmax - xmin);
+  const makeBins = ()=>Array.from({length:binsCount}, (_,i)=>({
+    x0: xmin + span*(i/binsCount),
+    x1: xmin + span*((i+1)/binsCount),
+    c: 0
+  }));
+  const allBins = makeBins();
+  const faceBins = makeBins();
+  const ndBins = makeBins();
+
+  for(const p of valid){
+    let idx = Math.floor((p.m - xmin) / span * binsCount);
+    idx = Math.max(0, Math.min(binsCount-1, idx));
+    allBins[idx].c += 1;
+    if(p.NoData) ndBins[idx].c += 1;
+    else faceBins[idx].c += 1;
+  }
+
+  function binsToSeries(bins, color, label){
+    const maxC = Math.max(1, ...bins.map(b=>b.c));
+    const pts = bins.map(b=>({x:(b.x0+b.x1)/2, y:b.c, x0:b.x0, x1:b.x1, c:b.c, norm:b.c/maxC}));
+    return {data:pts, color, label, maxC};
+  }
+
+  const series = groupMode === 'split'
+    ? [
+        binsToSeries(faceBins, "rgba(103,212,255,.95)", "Faceit"),
+        binsToSeries(ndBins, "rgba(255,204,102,.95)", "NoData")
+      ]
+    : [
+        binsToSeries(allBins, "rgba(103,212,255,.95)", "All")
+      ];
+
+  const ymax = Math.max(1, ...series.flatMap(s=>s.data.map(p=>p.c)));
+  return {series, range:{xmin, xmax, ymin:0, ymax:ymax * 1.12}};
+}
+
 function drawDbScatterExplorer(cfg, forceReset){
   const canvas = document.getElementById("dbScatterChart");
   const meta = document.getElementById("dbScatterMeta");
@@ -2228,16 +2342,29 @@ function drawDbScatterExplorer(cfg, forceReset){
   initDbScatterControls();
 
   const ds = getDbScatterDataset(cfg);
-  const points = ds.points;
-  const xLabel = DB_SCATTER_FIELDS[ds.xKey]?.label || ds.xKey;
-  const yLabel = DB_SCATTER_FIELDS[ds.yKey]?.label || ds.yKey;
+  const chartMode = document.getElementById("dbChartMode")?.value || dbScatterState.chartMode || "scatter";
+  const colorMode = document.getElementById("dbScatterColorMode")?.value || dbScatterState.colorMode || "single";
+  const groupMode = document.getElementById("dbDistGroupMode")?.value || dbScatterState.groupMode || "all";
   const lineMode = document.getElementById("dbScatterLine")?.value || dbScatterState.lineMode || "binned";
   const binsCount = Math.max(4, Math.min(50, parseInt(document.getElementById("dbScatterBins")?.value || dbScatterState.bins || 14, 10)));
+  dbScatterState.chartMode = chartMode;
+  dbScatterState.colorMode = colorMode;
+  dbScatterState.groupMode = groupMode;
   dbScatterState.lineMode = lineMode;
   dbScatterState.bins = binsCount;
 
-  const base = getScatterRanges(points);
-  const signature = `${ds.xKey}|${ds.yKey}|${dbScatterState.filter}`;
+  const xLabel = DB_SCATTER_FIELDS[ds.xKey]?.label || ds.xKey;
+  const yLabel = DB_SCATTER_FIELDS[ds.yKey]?.label || ds.yKey;
+  const mLabel = DB_SCATTER_FIELDS[ds.metricKey]?.label || ds.metricKey;
+
+  const scatterPoints = ds.points.filter(p=>Number.isFinite(p.x) && Number.isFinite(p.y));
+  const base = chartMode === "distribution"
+    ? buildDistributionSeries(ds.points, binsCount, groupMode).range
+    : getScatterRanges(scatterPoints);
+
+  const signature = chartMode === "distribution"
+    ? `${chartMode}|${ds.metricKey}|${dbScatterState.filter}|${groupMode}`
+    : `${chartMode}|${ds.xKey}|${ds.yKey}|${dbScatterState.filter}`;
   if(forceReset || !dbScatterState.baseView || dbScatterState.signature !== signature){
     dbScatterState.baseView = {...base};
     dbScatterState.view = {...base};
@@ -2274,7 +2401,6 @@ function drawDbScatterExplorer(cfg, forceReset){
 
   canvas.__plotGeom = {padL,padT,padB,padR,inset,plotW,plotH,xmin,xmax,ymin,ymax,px2x,px2y};
 
-  // grid
   ctx.strokeStyle = "rgba(232,238,246,.10)";
   ctx.lineWidth = 1*dpr;
   const gridN = 5;
@@ -2285,7 +2411,6 @@ function drawDbScatterExplorer(cfg, forceReset){
     ctx.beginPath(); ctx.moveTo(padL+inset, gy); ctx.lineTo(padL+inset+plotW, gy); ctx.stroke();
   }
 
-  // ticks
   ctx.fillStyle = "rgba(232,238,246,.78)";
   ctx.font = `${11*dpr}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace`;
 
@@ -2302,68 +2427,109 @@ function drawDbScatterExplorer(cfg, forceReset){
     ctx.fillText(lab, tx, H - 26*dpr);
   });
 
-  // axis titles
   ctx.save();
   ctx.translate(padL - 56*dpr, padT + inset + plotH/2);
   ctx.rotate(-Math.PI/2);
-  ctx.fillText(yLabel, 0, 0);
+  ctx.fillText(chartMode === "distribution" ? "count" : yLabel, 0, 0);
   ctx.restore();
-  ctx.fillText(xLabel, padL + inset + plotW/2 - 20*dpr, H - 10*dpr);
+  ctx.fillText(chartMode === "distribution" ? mLabel : xLabel, padL + inset + plotW/2 - 20*dpr, H - 10*dpr);
 
-  // points
-  ctx.fillStyle = "rgba(255,255,255,.55)";
-  for(const p of points){
-    if(p.x < xmin || p.x > xmax || p.y < ymin || p.y > ymax) continue;
-    const px = x2px(p.x), py = y2px(p.y);
-    ctx.beginPath();
-    ctx.arc(px, py, 3*dpr, 0, Math.PI*2);
-    ctx.fill();
-    canvas.__hoverPoints.push({
-      x:px, y:py, r:8*dpr,
-      tooltip: `${p.id}\n${p.nick}\nX (${xLabel}): ${round(p.x,3)}\nY (${yLabel}): ${round(p.y,3)}\nElo: ${p.Elo}\nFinalPlayer: ${round(p.FinalPlayer,2)}`
-    });
-  }
-
-  // line mode
-  let note = "";
-  const lines = [];
-  if(lineMode === "linear"){
-    const trend = getLinearTrend(points);
-    if(trend) lines.push({data:trend, color:"rgba(103,212,255,.95)", label:"linear trend"});
-  }else if(lineMode === "binned"){
-    const trend = getBinnedAverage(points, binsCount);
-    if(trend) lines.push({data:trend, color:"rgba(103,212,255,.95)", label:`binned avg (${binsCount})`});
-  }else if(lineMode === "theoretical"){
-    const th = getTheoreticalLines(ds.xKey, ds.yKey, cfg, {xmin:base.xmin, xmax:base.xmax});
-    note = th.note || "";
-    for(const ln of th.lines) lines.push(ln);
-  }
-
-  for(const line of lines){
-    ctx.strokeStyle = line.color || "rgba(103,212,255,.95)";
-    ctx.lineWidth = 2*dpr;
-    ctx.beginPath();
-    line.data.forEach((p, idx)=>{
-      const px = x2px(p.x), py = y2px(p.y);
-      if(idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
-    if(line.label && line.data.length){
-      const last = line.data[line.data.length-1];
-      const lx = Math.min(x2px(last.x), padL + inset + plotW - 110*dpr);
-      const ly = Math.max(y2px(last.y) - 8*dpr, padT + 12*dpr);
-      ctx.fillStyle = line.color || "rgba(103,212,255,.95)";
-      ctx.fillText(line.label, lx, ly);
+  if(chartMode === "distribution"){
+    const built = buildDistributionSeries(ds.points, binsCount, groupMode);
+    for(const s of built.series){
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2*dpr;
+      ctx.beginPath();
+      s.data.forEach((p, idx)=>{
+        const px = x2px(p.x), py = y2px(p.c);
+        if(idx===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      s.data.forEach(p=>{
+        if(p.x < xmin || p.x > xmax) return;
+        const px = x2px(p.x), py = y2px(p.c);
+        ctx.fillStyle = s.color;
+        ctx.beginPath(); ctx.arc(px, py, 2.5*dpr, 0, Math.PI*2); ctx.fill();
+        let tip = `Bin: ${round(p.x0,3)} .. ${round(p.x1,3)}
+Count: ${p.c}`;
+        if(groupMode === "split") tip = `${s.label}
+` + tip;
+        canvas.__hoverPoints.push({x:px,y:py,r:8*dpr,tooltip:tip});
+      });
+      if(s.label && s.data.length){
+        const last = s.data[s.data.length-1];
+        ctx.fillStyle = s.color;
+        ctx.fillText(s.label, Math.min(x2px(last.x), padL + inset + plotW - 80*dpr), Math.max(y2px(last.c)-8*dpr, padT+14*dpr));
+      }
     }
-  }
 
-  if(meta){
-    meta.innerHTML = `Scatter: <span class="k">${xLabel}</span> vs <span class="k">${yLabel}</span> &nbsp; • &nbsp; Line: <span class="k">${lineMode === "binned" ? `Binned average (${binsCount})` : lineMode === "linear" ? "Linear trend" : lineMode === "theoretical" ? "Theoretical" : "None"}</span> &nbsp; • &nbsp; Points: <span class="k">${points.length}</span>`;
-  }
-  if(hint && lineMode === "theoretical" && note){
-    hint.innerHTML = `Theoretical: ${note}.<br>Этот график нужен для исследования распределения игроков в БД. По осям можно выбрать ключевые параметры игрока. Точки — реальные игроки из базы. Можно приближать график колесом мыши или тачпадом, перемещаться drag’ом и сбрасывать вид кнопкой Reset view.`;
-  }else if(hint){
-    hint.innerHTML = `Этот график нужен для исследования распределения игроков в БД. По осям можно выбрать ключевые параметры игрока. Точки — реальные игроки из базы. Линия может показывать общий тренд, сглаженное среднее или теоретическую зависимость для поддерживаемых пар осей. Можно приближать график колесом мыши или тачпадом, перемещаться drag’ом и сбрасывать вид кнопкой Reset view.`;
+    if(meta){
+      meta.innerHTML = `Distribution: <span class="k">${mLabel}</span> &nbsp; • &nbsp; Mode: <span class="k">Count</span> &nbsp; • &nbsp; Bins: <span class="k">${binsCount}</span> &nbsp; • &nbsp; Groups: <span class="k">${groupMode === "split" ? "Faceit vs NoData" : "All combined"}</span>`;
+    }
+    if(hint){
+      hint.innerHTML = `Этот график нужен для исследования распределения игроков в БД. В режиме <span class="k">Distribution</span> можно смотреть распределение игроков по одной метрике, сравнивать <span class="k">Faceit</span> и <span class="k">NoData</span>, приближать график колесом мыши или тачпадом, двигать его drag’ом и сбрасывать вид кнопкой <span class="k">Reset view</span>.`;
+    }
+  }else{
+    const baseColor = "rgba(255,255,255,.45)";
+    const ndColor = "rgba(255,204,102,.88)";
+    for(const p of scatterPoints){
+      if(p.x < xmin || p.x > xmax || p.y < ymin || p.y > ymax) continue;
+      const px = x2px(p.x), py = y2px(p.y);
+      ctx.fillStyle = (colorMode === "highlightNoData" && p.NoData) ? ndColor : baseColor;
+      ctx.beginPath();
+      ctx.arc(px, py, 3*dpr, 0, Math.PI*2);
+      ctx.fill();
+      canvas.__hoverPoints.push({
+        x:px, y:py, r:8*dpr,
+        tooltip: `${p.id}
+${p.nick}
+X (${xLabel}): ${round(p.x,3)}
+Y (${yLabel}): ${round(p.y,3)}
+Elo: ${p.Elo}
+FinalPlayer: ${round(p.FinalPlayer,2)}`
+      });
+    }
+
+    let note = "";
+    const lines = [];
+    if(lineMode === "linear"){
+      const trend = getLinearTrend(scatterPoints);
+      if(trend) lines.push({data:trend, color:"rgba(103,212,255,.95)", label:"linear trend"});
+    }else if(lineMode === "binned"){
+      const trend = getBinnedAverage(scatterPoints, binsCount);
+      if(trend) lines.push({data:trend, color:"rgba(103,212,255,.95)", label:`binned avg (${binsCount})`});
+    }else if(lineMode === "theoretical"){
+      const th = getTheoreticalLines(ds.xKey, ds.yKey, cfg, {xmin:base.xmin, xmax:base.xmax});
+      note = th.note || "";
+      for(const ln of th.lines) lines.push(ln);
+    }
+
+    for(const line of lines){
+      ctx.strokeStyle = line.color || "rgba(103,212,255,.95)";
+      ctx.lineWidth = 2*dpr;
+      ctx.beginPath();
+      line.data.forEach((p, idx)=>{
+        const px = x2px(p.x), py = y2px(p.y);
+        if(idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      if(line.label && line.data.length){
+        const last = line.data[line.data.length-1];
+        const lx = Math.min(x2px(last.x), padL + inset + plotW - 110*dpr);
+        const ly = Math.max(y2px(last.y) - 8*dpr, padT + 12*dpr);
+        ctx.fillStyle = line.color || "rgba(103,212,255,.95)";
+        ctx.fillText(line.label, lx, ly);
+      }
+    }
+
+    if(meta){
+      meta.innerHTML = `Scatter: <span class="k">${xLabel}</span> vs <span class="k">${yLabel}</span> &nbsp; • &nbsp; Line: <span class="k">${lineMode === "binned" ? `Binned average (${binsCount})` : lineMode === "linear" ? "Linear trend" : lineMode === "theoretical" ? "Theoretical" : "None"}</span> &nbsp; • &nbsp; Points: <span class="k">${scatterPoints.length}</span> &nbsp; • &nbsp; Color: <span class="k">${colorMode === "highlightNoData" ? "Highlight NoData" : "Single color"}</span>`;
+    }
+    if(hint && lineMode === "theoretical" && note){
+      hint.innerHTML = `Theoretical: ${note}.<br>В режиме <span class="k">Scatter</span> можно смотреть связь между двумя метриками по игрокам, выделять <span class="k">NoData</span> цветом, приближать график колесом мыши или тачпадом, двигать его drag’ом и сбрасывать вид кнопкой <span class="k">Reset view</span>.`;
+    }else if(hint){
+      hint.innerHTML = `В режиме <span class="k">Scatter</span> можно смотреть связь между двумя метриками по игрокам, выделять <span class="k">NoData</span> цветом, использовать линии <span class="k">Linear trend</span>, <span class="k">Binned average</span> и <span class="k">Theoretical</span>, приближать график колесом мыши или тачпадом, двигать его drag’ом и сбрасывать вид кнопкой <span class="k">Reset view</span>.`;
+    }
   }
 
   ensureCanvasTooltip(canvas);
