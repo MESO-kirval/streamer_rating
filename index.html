@@ -1714,6 +1714,12 @@ function fillRandomTeams(){
   }
   document.getElementById("compareOut").innerHTML="";
   lastA=null; lastB=null; teamResults={};
+  for(const which of TEAM_KEYS){
+    const res = calcTeam(which);
+    teamResults[which] = res;
+    if(which==="A") lastA = res;
+    if(which==="B") lastB = res;
+  }
   updateTeamsSummary();
 }
 function resetTeams(){
