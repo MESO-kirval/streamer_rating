@@ -1657,6 +1657,7 @@ function drawLineChart(canvas, lines, opts){
 
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0,0,W,H);
+  canvas.__hoverPoints = [];
 
   const padL = 70*dpr, padR = 20*dpr, padT = 18*dpr, padB = 54*dpr;
   const inset = 6*dpr;
@@ -1718,16 +1719,15 @@ function drawLineChart(canvas, lines, opts){
   // lines
   for(const line of lines){
     if(line.pointOnly){
-      // scatter points
+      // scatter points: no permanent text labels; hover tooltip is handled below
       ctx.fillStyle = line.color || "rgba(255,255,255,.85)";
+      const hoverPts = (canvas.__hoverPoints = canvas.__hoverPoints || []);
       for(const p of line.data){
         const px = x2px(p.x), py = y2px(p.y);
         ctx.beginPath();
         ctx.arc(px, py, 3*dpr, 0, Math.PI*2);
         ctx.fill();
-        if(p.label){
-          ctx.fillText(String(p.label).slice(0,10), px + 6*dpr, py - 6*dpr);
-        }
+        hoverPts.push({x:px, y:py, r:8*dpr, tooltip:p.tooltip || p.id || ""});
       }
       continue;
     }
@@ -1755,6 +1755,78 @@ function drawLineChart(canvas, lines, opts){
     ctx.setLineDash([6*dpr,6*dpr]);
     ctx.beginPath(); ctx.moveTo(mx, padT+inset); ctx.lineTo(mx, padT+inset+plotH); ctx.stroke();
     ctx.setLineDash([]);
+  }
+
+  // hover tooltip for scatter points (shows DB id)
+  if(!canvas.__hoverBound){
+    canvas.addEventListener("mousemove", (ev)=>{
+      const pts = canvas.__hoverPoints || [];
+      const rect = canvas.getBoundingClientRect();
+      const dprNow = (window.devicePixelRatio||1);
+      const mx = (ev.clientX - rect.left) * dprNow;
+      const my = (ev.clientY - rect.top) * dprNow;
+      let hit = null;
+      for(const p of pts){
+        const dx = mx - p.x, dy = my - p.y;
+        if(dx*dx + dy*dy <= p.r*p.r){ hit = p; break; }
+      }
+      let tip = canvas.__tooltipEl;
+      if(!tip){
+        tip = document.createElement("div");
+        tip.className = "canvasHoverTip";
+        tip.style.position = "fixed";
+        tip.style.zIndex = "9999";
+        tip.style.pointerEvents = "none";
+        tip.style.padding = "4px 8px";
+        tip.style.borderRadius = "8px";
+        tip.style.border = "1px solid rgba(255,255,255,.12)";
+        tip.style.background = "rgba(8, 13, 24, 0.92)";
+        tip.style.color = "rgba(232,238,246,.96)";
+        tip.style.font = '12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace';
+        tip.style.boxShadow = "0 10px 24px rgba(0,0,0,.25)";
+        tip.style.backdropFilter = "blur(8px)";
+        tip.style.webkitBackdropFilter = "blur(8px)";
+        tip.style.display = "none";
+        document.body.appendChild(tip);
+        canvas.__tooltipEl = tip;
+      }
+      if(hit){
+        tip.textContent = String(hit.tooltip || "");
+        tip.style.display = "block";
+        tip.style.left = (ev.clientX + 12) + "px";
+        tip.style.top = (ev.clientY + 12) + "px";
+        canvas.style.cursor = "pointer";
+      }else{
+        tip.style.display = "none";
+        canvas.style.cursor = "default";
+      }
+    });
+    canvas.addEventListener("click", (ev)=>{
+      const pts = canvas.__hoverPoints || [];
+      const rect = canvas.getBoundingClientRect();
+      const dprNow = (window.devicePixelRatio||1);
+      const mx = (ev.clientX - rect.left) * dprNow;
+      const my = (ev.clientY - rect.top) * dprNow;
+      let hit = null;
+      for(const p of pts){
+        const dx = mx - p.x, dy = my - p.y;
+        if(dx*dx + dy*dy <= p.r*p.r){ hit = p; break; }
+      }
+      if(hit){
+        let tip = canvas.__tooltipEl;
+        if(tip){
+          tip.textContent = String(hit.tooltip || "");
+          tip.style.display = "block";
+          tip.style.left = (ev.clientX + 12) + "px";
+          tip.style.top = (ev.clientY + 12) + "px";
+        }
+      }
+    });
+    canvas.addEventListener("mouseleave", ()=>{
+      if(canvas.__tooltipEl) canvas.__tooltipEl.style.display = "none";
+      canvas.style.cursor = "default";
+    });
+    canvas.__hoverBound = true;
   }
 }
 
@@ -1874,7 +1946,7 @@ function drawOnePagerCharts(cfg){
         const sigp = sigmoid((elo - cfg.E0)/cfg.W);
         const dRp = cfg.BETA * (2*sigp - 1);
         const rc = pl.NoData ? Rb : (Rb + dRp);
-        samples.push({x: elo, y: rc, label: (pl.nick||pl.id||"").slice(0,0)});
+        samples.push({x: elo, y: rc, tooltip: pl.id});
       }
     }
     if(samples.length){ lines.push({data:samples, color:"rgba(255,255,255,.85)", pointOnly:true}); }
