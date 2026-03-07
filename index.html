@@ -79,6 +79,23 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
 .dbTopCard{height:360px;overflow:hidden}
 .dbTopCard .chartCanvasWide{aspect-ratio:1.8/1}
 
+
+.canvasHoverTip{
+  position:fixed;
+  z-index:9999;
+  pointer-events:none;
+  padding:6px 8px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(8,13,24,.94);
+  color:rgba(232,238,246,.96);
+  box-shadow:0 10px 24px rgba(0,0,0,.28);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  font:12px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+  white-space:pre-line;
+}
+
 .tableScroll thead th{
   position: sticky;
   top: 0;
@@ -716,6 +733,58 @@ th{color:rgba(232,238,246,.9);font-weight:700;background:rgba(15,22,32,.35)}
         <canvas id="dbHistChart" class="chartCanvasWide" style="max-height:220px;margin-top:8px"></canvas>
       </details>
 
+      <details id="dbScatterWrap" style="margin-top:12px">
+        <summary>Исследовательский scatter-график по БД</summary>
+        <div class="small" style="margin-top:8px">Исследовательский график по игрокам из БД: можно выбрать оси, режим линии, фильтр, приближать колесом мыши/тачпадом, двигать drag’ом и сбрасывать вид кнопкой Reset view.</div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="inline3">
+            <div class="field">
+              <label>X axis</label>
+              <select id="dbScatterX"></select>
+            </div>
+            <div class="field">
+              <label>Y axis</label>
+              <select id="dbScatterY"></select>
+            </div>
+            <div class="field">
+              <label>Line mode</label>
+              <select id="dbScatterLine">
+                <option value="binned" selected>Binned average</option>
+                <option value="linear">Linear trend</option>
+                <option value="theoretical">Theoretical</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="inline3">
+            <div class="field">
+              <label>Filter</label>
+              <select id="dbScatterFilter">
+                <option value="all" selected>All</option>
+                <option value="faceit">Faceit only</option>
+                <option value="nodata">NoData only</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Bins count</label>
+              <input id="dbScatterBins" type="number" min="4" max="50" step="1" value="14"/>
+            </div>
+            <div class="field" style="align-self:end">
+              <button class="btn" id="btnDbScatterReset">Reset view</button>
+            </div>
+          </div>
+
+          <div class="small" id="dbScatterMeta" style="margin-top:6px"></div>
+          <canvas id="dbScatterChart" class="chartCanvasWide" style="margin-top:8px;max-height:420px"></canvas>
+          <div class="small" id="dbScatterHint" style="margin-top:8px">
+            Этот график нужен для исследования распределения игроков в БД. По осям можно выбрать ключевые параметры игрока. Точки — реальные игроки из базы. Линия может показывать общий тренд, сглаженное среднее или теоретическую зависимость для поддерживаемых пар осей. Можно приближать график колесом мыши или тачпадом, перемещаться drag’ом и сбрасывать вид кнопкой Reset view.
+          </div>
+        </div>
+      </details>
+
+
 <div class="row" style="justify-content:space-between;align-items:center;margin-top:12px">
         <div class="row" style="gap:10px;align-items:center">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -776,7 +845,7 @@ function setTab(panelId){
     }
     if(panelId==="panel-db"){
       fillDbQuickFromCfg();
-      setTimeout(()=>{ drawDbMiniChart(CFG); drawDbHistogram(CFG); }, 80);
+      setTimeout(()=>{ drawDbMiniChart(CFG); drawDbHistogram(CFG); drawDbScatterExplorer(CFG, false); }, 80);
     }
   }
 }
@@ -1310,6 +1379,7 @@ function refreshAllDbDependentUI(){
     drawOnePagerCharts(CFG);
     drawDbMiniChart(CFG);
     drawDbHistogram(CFG);
+    drawDbScatterExplorer(CFG, false);
   }
 }
 function renderTeams(){
@@ -1971,6 +2041,434 @@ function safeRedrawCharts(){
   tick();
 }
 
+
+const DB_SCATTER_FIELDS = {
+  Elo: {label:"Elo", get:(p,r)=> Number.isFinite(Number(p.Elo)) ? Number(p.Elo) : 1150},
+  MatchesCount: {label:"MatchesCount", get:(p,r)=> Number.isFinite(Number(p.MatchesCount)) ? Number(p.MatchesCount) : null},
+  KPR: {label:"KPR", get:(p,r)=> p.NoData ? null : Number(p.KPR)},
+  APR: {label:"APR", get:(p,r)=> p.NoData ? null : Number(p.APR)},
+  DPR: {label:"DPR", get:(p,r)=> p.NoData ? null : Number(p.DPR)},
+  ADR: {label:"ADR", get:(p,r)=> p.NoData ? null : Number(p.ADR)},
+  MKPR: {label:"MKPR", get:(p,r)=> p.NoData ? null : Number(p.MKPR)},
+  R_raw: {label:"R_raw", get:(p,r)=> Number(r.R_raw)},
+  R_used: {label:"R_used", get:(p,r)=> Number(r.R_used)},
+  dR: {label:"dR", get:(p,r)=> Number(r.dR)},
+  Rcorr: {label:"Rcorr", get:(p,r)=> Number(r.Rcorr)},
+  SkillScore: {label:"SkillScore", get:(p,r)=> Number(r.SkillScore)},
+  SoftSkill: {label:"SoftSkill", get:(p,r)=> Number(r.Soft)},
+  FinalPlayer: {label:"FinalPlayer", get:(p,r)=> Number(r.Final)},
+  AimAdj: {label:"AimAdj", get:(p,r)=> Number(r.A)},
+  NoDataAdj: {label:"NoDataAdj", get:(p,r)=> Number(r.ND)},
+};
+
+const dbScatterState = {
+  xKey: "Elo",
+  yKey: "Rcorr",
+  filter: "all",
+  lineMode: "binned",
+  bins: 14,
+  baseView: null,
+  view: null,
+  drag: null,
+};
+
+function initDbScatterControls(){
+  const xSel = document.getElementById("dbScatterX");
+  const ySel = document.getElementById("dbScatterY");
+  if(!xSel || !ySel || xSel.dataset.ready === "1") return;
+
+  const entries = Object.entries(DB_SCATTER_FIELDS);
+  for(const [key, def] of entries){
+    const ox = document.createElement("option");
+    ox.value = key; ox.textContent = def.label;
+    if(key === dbScatterState.xKey) ox.selected = true;
+    xSel.appendChild(ox);
+
+    const oy = document.createElement("option");
+    oy.value = key; oy.textContent = def.label;
+    if(key === dbScatterState.yKey) oy.selected = true;
+    ySel.appendChild(oy);
+  }
+
+  const lineSel = document.getElementById("dbScatterLine");
+  const filterSel = document.getElementById("dbScatterFilter");
+  const binsEl = document.getElementById("dbScatterBins");
+  const resetBtn = document.getElementById("btnDbScatterReset");
+
+  xSel.onchange = ()=>{ dbScatterState.xKey = xSel.value; drawDbScatterExplorer(CFG, true); };
+  ySel.onchange = ()=>{ dbScatterState.yKey = ySel.value; drawDbScatterExplorer(CFG, true); };
+  if(lineSel) lineSel.onchange = ()=>{ dbScatterState.lineMode = lineSel.value; drawDbScatterExplorer(CFG, false); };
+  if(filterSel) filterSel.onchange = ()=>{ dbScatterState.filter = filterSel.value; drawDbScatterExplorer(CFG, true); };
+  if(binsEl) binsEl.onchange = ()=>{ dbScatterState.bins = Math.max(4, Math.min(50, parseInt(binsEl.value||14,10)||14)); binsEl.value = String(dbScatterState.bins); drawDbScatterExplorer(CFG, false); };
+  if(resetBtn) resetBtn.onclick = ()=>resetDbScatterView();
+
+  xSel.dataset.ready = "1";
+  initDbScatterCanvasInteractions();
+}
+
+function getDbScatterDataset(cfg){
+  const xKey = document.getElementById("dbScatterX")?.value || dbScatterState.xKey || "Elo";
+  const yKey = document.getElementById("dbScatterY")?.value || dbScatterState.yKey || "Rcorr";
+  const filter = document.getElementById("dbScatterFilter")?.value || dbScatterState.filter || "all";
+  dbScatterState.xKey = xKey;
+  dbScatterState.yKey = yKey;
+  dbScatterState.filter = filter;
+
+  const xDef = DB_SCATTER_FIELDS[xKey];
+  const yDef = DB_SCATTER_FIELDS[yKey];
+  const pts = [];
+
+  for(const p of DB.players){
+    if(filter === "faceit" && p.NoData) continue;
+    if(filter === "nodata" && !p.NoData) continue;
+    const row = calcForTable(p);
+    const xv = xDef ? xDef.get(p, row) : null;
+    const yv = yDef ? yDef.get(p, row) : null;
+    if(!Number.isFinite(xv) || !Number.isFinite(yv)) continue;
+    pts.push({
+      x: Number(xv),
+      y: Number(yv),
+      id: p.id,
+      nick: p.nick || p.id,
+      Elo: Number.isFinite(Number(p.Elo)) ? Number(p.Elo) : 1150,
+      FinalPlayer: Number(row.Final),
+      NoData: !!p.NoData
+    });
+  }
+  return {points: pts, xKey, yKey};
+}
+
+function getScatterRanges(points){
+  if(!points.length){
+    return {xmin:0, xmax:1, ymin:0, ymax:1};
+  }
+  let xmin = Math.min(...points.map(p=>p.x));
+  let xmax = Math.max(...points.map(p=>p.x));
+  let ymin = Math.min(...points.map(p=>p.y));
+  let ymax = Math.max(...points.map(p=>p.y));
+
+  if(xmin === xmax){ xmin -= 1; xmax += 1; }
+  if(ymin === ymax){ ymin -= 1; ymax += 1; }
+
+  const xPad = (xmax - xmin) * 0.08 || 1;
+  const yPad = (ymax - ymin) * 0.10 || 1;
+  return {xmin:xmin-xPad, xmax:xmax+xPad, ymin:ymin-yPad, ymax:ymax+yPad};
+}
+
+function getLinearTrend(points){
+  if(points.length < 2) return null;
+  const n = points.length;
+  let sx=0, sy=0, sxx=0, sxy=0;
+  for(const p of points){
+    sx += p.x; sy += p.y; sxx += p.x*p.x; sxy += p.x*p.y;
+  }
+  const denom = n*sxx - sx*sx;
+  if(Math.abs(denom) < 1e-9) return null;
+  const m = (n*sxy - sx*sy) / denom;
+  const b = (sy - m*sx) / n;
+  const xs = points.map(p=>p.x);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  return [{x:xmin, y:m*xmin+b}, {x:xmax, y:m*xmax+b}];
+}
+
+function getBinnedAverage(points, binsCount){
+  if(points.length < 2) return null;
+  const xs = points.map(p=>p.x);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const span = Math.max(1e-9, xmax - xmin);
+  const bins = Array.from({length:binsCount}, ()=>({xsum:0, ysum:0, c:0}));
+  for(const p of points){
+    let idx = Math.floor((p.x - xmin) / span * binsCount);
+    idx = Math.max(0, Math.min(binsCount-1, idx));
+    bins[idx].xsum += p.x;
+    bins[idx].ysum += p.y;
+    bins[idx].c += 1;
+  }
+  const out = [];
+  for(const b of bins){
+    if(!b.c) continue;
+    out.push({x:b.xsum/b.c, y:b.ysum/b.c});
+  }
+  return out.length >= 2 ? out : null;
+}
+
+function getTheoreticalLines(xKey, yKey, cfg, rangeX){
+  if(xKey !== "Elo") return {lines:[], note:"Theoretical line is available only for supported axis pairs"};
+  const step = Math.max(10, (rangeX.xmax - rangeX.xmin) / 60);
+  if(yKey === "dR"){
+    const arr = [];
+    for(let e=rangeX.xmin; e<=rangeX.xmax; e+=step){
+      const sig = sigmoid((e-cfg.E0)/cfg.W);
+      arr.push({x:e, y:cfg.BETA*(2*sig-1)});
+    }
+    return {lines:[{data:arr, color:"rgba(255,204,102,.9)", label:"theoretical dR"}], note:""};
+  }
+  if(yKey === "Rcorr"){
+    const baseRs=[1.0,1.2,1.4];
+    const colors=["rgba(103,212,255,.9)","rgba(124,255,157,.9)","rgba(255,204,102,.9)"];
+    const lines = baseRs.map((R,idx)=>{
+      const arr=[];
+      for(let e=rangeX.xmin; e<=rangeX.xmax; e+=step){
+        const sig=sigmoid((e-cfg.E0)/cfg.W);
+        const dR=cfg.BETA*(2*sig-1);
+        arr.push({x:e,y:R+dR});
+      }
+      return {data:arr,color:colors[idx],label:`R=${R.toFixed(1)}`};
+    });
+    return {lines, note:"Theoretical lines use fixed R = 1.0 / 1.2 / 1.4"};
+  }
+  return {lines:[], note:"Theoretical line is available only for supported axis pairs"};
+}
+
+function drawDbScatterExplorer(cfg, forceReset){
+  const canvas = document.getElementById("dbScatterChart");
+  const meta = document.getElementById("dbScatterMeta");
+  const hint = document.getElementById("dbScatterHint");
+  if(!canvas || !cfg) return;
+  initDbScatterControls();
+
+  const ds = getDbScatterDataset(cfg);
+  const points = ds.points;
+  const xLabel = DB_SCATTER_FIELDS[ds.xKey]?.label || ds.xKey;
+  const yLabel = DB_SCATTER_FIELDS[ds.yKey]?.label || ds.yKey;
+  const lineMode = document.getElementById("dbScatterLine")?.value || dbScatterState.lineMode || "binned";
+  const binsCount = Math.max(4, Math.min(50, parseInt(document.getElementById("dbScatterBins")?.value || dbScatterState.bins || 14, 10)));
+  dbScatterState.lineMode = lineMode;
+  dbScatterState.bins = binsCount;
+
+  const base = getScatterRanges(points);
+  const signature = `${ds.xKey}|${ds.yKey}|${dbScatterState.filter}`;
+  if(forceReset || !dbScatterState.baseView || dbScatterState.signature !== signature){
+    dbScatterState.baseView = {...base};
+    dbScatterState.view = {...base};
+    dbScatterState.signature = signature;
+  }else{
+    dbScatterState.baseView = {...base};
+  }
+
+  const view = dbScatterState.view || {...base};
+
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = rect.width;
+  const cssH = rect.height;
+  if(!cssW || !cssH) return;
+
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  canvas.__hoverPoints = [];
+
+  const padL = 72*dpr, padR = 20*dpr, padT = 22*dpr, padB = 58*dpr;
+  const inset = 6*dpr;
+  const plotW = W - padL - padR - inset*2;
+  const plotH = H - padT - padB - inset*2;
+  const xmin=view.xmin, xmax=view.xmax, ymin=view.ymin, ymax=view.ymax;
+
+  function x2px(x){ return padL + inset + (x - xmin) / Math.max(1e-9, (xmax - xmin)) * plotW; }
+  function y2px(y){ return padT + inset + (1 - (y - ymin) / Math.max(1e-9, (ymax - ymin))) * plotH; }
+  function px2x(px){ return xmin + ((px - padL - inset) / plotW) * (xmax - xmin); }
+  function px2y(py){ return ymax - ((py - padT - inset) / plotH) * (ymax - ymin); }
+
+  canvas.__plotGeom = {padL,padT,padB,padR,inset,plotW,plotH,xmin,xmax,ymin,ymax,px2x,px2y};
+
+  // grid
+  ctx.strokeStyle = "rgba(232,238,246,.10)";
+  ctx.lineWidth = 1*dpr;
+  const gridN = 5;
+  for(let i=0;i<=gridN;i++){
+    const gx = padL + inset + (plotW/gridN)*i;
+    const gy = padT + inset + (plotH/gridN)*i;
+    ctx.beginPath(); ctx.moveTo(gx, padT+inset); ctx.lineTo(gx, padT+inset+plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL+inset, gy); ctx.lineTo(padL+inset+plotW, gy); ctx.stroke();
+  }
+
+  // ticks
+  ctx.fillStyle = "rgba(232,238,246,.78)";
+  ctx.font = `${11*dpr}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace`;
+
+  const yTicks = Array.from({length:5}, (_,i)=>ymin + (ymax-ymin)*(i/4));
+  yTicks.forEach(v=>{
+    const py = y2px(v);
+    ctx.fillText((Math.round(v*1000)/1000).toString(), padL - 50*dpr, py + 4*dpr);
+  });
+  const xTicks = Array.from({length:5}, (_,i)=>xmin + (xmax-xmin)*(i/4));
+  xTicks.forEach(v=>{
+    const px = x2px(v);
+    const lab = (Math.round(v*100)/100).toString();
+    const tx = Math.max(padL, Math.min(padL + inset + plotW - 28*dpr, px - 14*dpr));
+    ctx.fillText(lab, tx, H - 26*dpr);
+  });
+
+  // axis titles
+  ctx.save();
+  ctx.translate(padL - 56*dpr, padT + inset + plotH/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+  ctx.fillText(xLabel, padL + inset + plotW/2 - 20*dpr, H - 10*dpr);
+
+  // points
+  ctx.fillStyle = "rgba(255,255,255,.55)";
+  for(const p of points){
+    if(p.x < xmin || p.x > xmax || p.y < ymin || p.y > ymax) continue;
+    const px = x2px(p.x), py = y2px(p.y);
+    ctx.beginPath();
+    ctx.arc(px, py, 3*dpr, 0, Math.PI*2);
+    ctx.fill();
+    canvas.__hoverPoints.push({
+      x:px, y:py, r:8*dpr,
+      tooltip: `${p.id}\n${p.nick}\nX (${xLabel}): ${round(p.x,3)}\nY (${yLabel}): ${round(p.y,3)}\nElo: ${p.Elo}\nFinalPlayer: ${round(p.FinalPlayer,2)}`
+    });
+  }
+
+  // line mode
+  let note = "";
+  const lines = [];
+  if(lineMode === "linear"){
+    const trend = getLinearTrend(points);
+    if(trend) lines.push({data:trend, color:"rgba(103,212,255,.95)", label:"linear trend"});
+  }else if(lineMode === "binned"){
+    const trend = getBinnedAverage(points, binsCount);
+    if(trend) lines.push({data:trend, color:"rgba(103,212,255,.95)", label:`binned avg (${binsCount})`});
+  }else if(lineMode === "theoretical"){
+    const th = getTheoreticalLines(ds.xKey, ds.yKey, cfg, {xmin:base.xmin, xmax:base.xmax});
+    note = th.note || "";
+    for(const ln of th.lines) lines.push(ln);
+  }
+
+  for(const line of lines){
+    ctx.strokeStyle = line.color || "rgba(103,212,255,.95)";
+    ctx.lineWidth = 2*dpr;
+    ctx.beginPath();
+    line.data.forEach((p, idx)=>{
+      const px = x2px(p.x), py = y2px(p.y);
+      if(idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+    if(line.label && line.data.length){
+      const last = line.data[line.data.length-1];
+      const lx = Math.min(x2px(last.x), padL + inset + plotW - 110*dpr);
+      const ly = Math.max(y2px(last.y) - 8*dpr, padT + 12*dpr);
+      ctx.fillStyle = line.color || "rgba(103,212,255,.95)";
+      ctx.fillText(line.label, lx, ly);
+    }
+  }
+
+  if(meta){
+    meta.innerHTML = `Scatter: <span class="k">${xLabel}</span> vs <span class="k">${yLabel}</span> &nbsp; • &nbsp; Line: <span class="k">${lineMode === "binned" ? `Binned average (${binsCount})` : lineMode === "linear" ? "Linear trend" : lineMode === "theoretical" ? "Theoretical" : "None"}</span> &nbsp; • &nbsp; Points: <span class="k">${points.length}</span>`;
+  }
+  if(hint && lineMode === "theoretical" && note){
+    hint.innerHTML = `Theoretical: ${note}.<br>Этот график нужен для исследования распределения игроков в БД. По осям можно выбрать ключевые параметры игрока. Точки — реальные игроки из базы. Можно приближать график колесом мыши или тачпадом, перемещаться drag’ом и сбрасывать вид кнопкой Reset view.`;
+  }else if(hint){
+    hint.innerHTML = `Этот график нужен для исследования распределения игроков в БД. По осям можно выбрать ключевые параметры игрока. Точки — реальные игроки из базы. Линия может показывать общий тренд, сглаженное среднее или теоретическую зависимость для поддерживаемых пар осей. Можно приближать график колесом мыши или тачпадом, перемещаться drag’ом и сбрасывать вид кнопкой Reset view.`;
+  }
+
+  ensureCanvasTooltip(canvas);
+}
+
+function ensureCanvasTooltip(canvas){
+  if(canvas.__hoverBoundGeneric) return;
+  canvas.addEventListener("mousemove", (ev)=>{
+    const pts = canvas.__hoverPoints || [];
+    const rect = canvas.getBoundingClientRect();
+    const dprNow = (window.devicePixelRatio||1);
+    const mx = (ev.clientX - rect.left) * dprNow;
+    const my = (ev.clientY - rect.top) * dprNow;
+    let hit = null;
+    for(const p of pts){
+      const dx = mx - p.x, dy = my - p.y;
+      if(dx*dx + dy*dy <= p.r*p.r){ hit = p; break; }
+    }
+    let tip = canvas.__tooltipEl;
+    if(!tip){
+      tip = document.createElement("div");
+      tip.className = "canvasHoverTip";
+      tip.style.display = "none";
+      document.body.appendChild(tip);
+      canvas.__tooltipEl = tip;
+    }
+    if(hit){
+      tip.textContent = String(hit.tooltip || "");
+      tip.style.display = "block";
+      tip.style.left = (ev.clientX + 12) + "px";
+      tip.style.top = (ev.clientY + 12) + "px";
+      canvas.style.cursor = "pointer";
+    }else{
+      tip.style.display = "none";
+      canvas.style.cursor = (dbScatterState.drag ? "grabbing" : "default");
+    }
+  });
+  canvas.addEventListener("mouseleave", ()=>{
+    if(canvas.__tooltipEl) canvas.__tooltipEl.style.display = "none";
+    if(!dbScatterState.drag) canvas.style.cursor = "default";
+  });
+  canvas.__hoverBoundGeneric = true;
+}
+
+function resetDbScatterView(){
+  if(dbScatterState.baseView){
+    dbScatterState.view = {...dbScatterState.baseView};
+    drawDbScatterExplorer(CFG, false);
+  }
+}
+
+function initDbScatterCanvasInteractions(){
+  const canvas = document.getElementById("dbScatterChart");
+  if(!canvas || canvas.dataset.navReady === "1") return;
+
+  canvas.addEventListener("wheel", (ev)=>{
+    if(!dbScatterState.view || !canvas.__plotGeom) return;
+    ev.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const mx = (ev.clientX - rect.left) * dpr;
+    const my = (ev.clientY - rect.top) * dpr;
+    const g = canvas.__plotGeom;
+    const x = g.px2x(mx), y = g.px2y(my);
+    const factor = ev.deltaY < 0 ? 0.88 : 1.14;
+
+    const v = dbScatterState.view;
+    const nxmin = x - (x - v.xmin) * factor;
+    const nxmax = x + (v.xmax - x) * factor;
+    const nymin = y - (y - v.ymin) * factor;
+    const nymax = y + (v.ymax - y) * factor;
+    dbScatterState.view = {xmin:nxmin, xmax:nxmax, ymin:nymin, ymax:nymax};
+    drawDbScatterExplorer(CFG, false);
+  }, {passive:false});
+
+  canvas.addEventListener("mousedown", (ev)=>{
+    if(!dbScatterState.view || !canvas.__plotGeom) return;
+    dbScatterState.drag = {x: ev.clientX, y: ev.clientY, view:{...dbScatterState.view}};
+    canvas.style.cursor = "grabbing";
+  });
+  window.addEventListener("mousemove", (ev)=>{
+    if(!dbScatterState.drag || !canvas.__plotGeom) return;
+    const g = canvas.__plotGeom;
+    const dx = (ev.clientX - dbScatterState.drag.x) * (window.devicePixelRatio || 1);
+    const dy = (ev.clientY - dbScatterState.drag.y) * (window.devicePixelRatio || 1);
+    const spanX = dbScatterState.drag.view.xmax - dbScatterState.drag.view.xmin;
+    const spanY = dbScatterState.drag.view.ymax - dbScatterState.drag.view.ymin;
+    const ddx = dx / Math.max(1, g.plotW) * spanX;
+    const ddy = dy / Math.max(1, g.plotH) * spanY;
+    dbScatterState.view = {
+      xmin: dbScatterState.drag.view.xmin - ddx,
+      xmax: dbScatterState.drag.view.xmax - ddx,
+      ymin: dbScatterState.drag.view.ymin + ddy,
+      ymax: dbScatterState.drag.view.ymax + ddy,
+    };
+    drawDbScatterExplorer(CFG, false);
+  });
+  window.addEventListener("mouseup", ()=>{
+    dbScatterState.drag = null;
+    canvas.style.cursor = "default";
+  });
+
+  canvas.dataset.navReady = "1";
+}
+
 function applyCfg(){
   CFG = readCfg();
   window.CFG = CFG;
@@ -1987,6 +2485,7 @@ function applyCfg(){
   safeRedrawCharts();
   try{ drawDbMiniChart(CFG); }catch(e){}
   try{ drawDbHistogram(CFG); }catch(e){}
+  try{ drawDbScatterExplorer(CFG, false); }catch(e){}
 }
 document.getElementById("btnApplyCfg").onclick=()=>applyCfg();
 // DB export/import
@@ -2206,6 +2705,8 @@ for(const which of TEAM_KEYS){ const btn=document.getElementById(`btnTeam${which
 document.getElementById("btnCompare").onclick=()=>compareTeams();
 document.getElementById("btnFillRandom").onclick=()=>fillRandomTeams();
 document.getElementById("btnResetTeams").onclick=()=>resetTeams();
+
+initDbScatterControls();
 
 // Init
 applyCfg();
