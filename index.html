@@ -1874,7 +1874,7 @@ function drawOnePagerCharts(cfg){
         const sigp = sigmoid((elo - cfg.E0)/cfg.W);
         const dRp = cfg.BETA * (2*sigp - 1);
         const rc = pl.NoData ? Rb : (Rb + dRp);
-        samples.push({x: elo, y: rc, label: (pl.nick||pl.id||"").slice(0,10)});
+        samples.push({x: elo, y: rc, label: (pl.nick||pl.id||"").slice(0,0)});
       }
     }
     if(samples.length){ lines.push({data:samples, color:"rgba(255,255,255,.85)", pointOnly:true}); }
